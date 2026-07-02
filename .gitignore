@@ -41,3 +41,6 @@ outputs/
 
 # Large dataset files (kept locally)
 qa_dataset.json
+
+# SLURM output logs
+logs_terminal/
