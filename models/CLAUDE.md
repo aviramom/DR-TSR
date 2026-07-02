@@ -91,6 +91,13 @@ not exist. It has been **removed from `method_wrapper_dict`** — use
 `dino_knn_clsa_baseline` instead, which has the full delay-embedding + DINOv2-Large
 pipeline and no missing dependencies.
 
+### `ChatTSVLLMWrapper` broken on vLLM 0.19.1 — use `ChatTSHFWrapper` instead
+vLLM 0.19.1 (`multits_large` env) removed the `VLLM_USE_V1` env var. The workaround in
+`vllm_chatts_model.py` that sets `os.environ["VLLM_USE_V1"] = "0"` is therefore silently
+ignored, V1 runs, and its `TransformersForCausalLM` weight loader crashes because ChatTS
+weights are named `model.model.layers.*` but V1 looks for `layers.*` at the top level.
+Use `bytedance-research/ChatTS-8B` (`ChatTSHFWrapper`, `run_single_gpu.sh`) instead.
+
 ### `get_args_dict()` must not redeclare global CLI args
 `base_model.get_relevant_args()` raises `ValueError` if a key in `get_args_dict()` already
 exists in the global argparse namespace (defined in `utils/args.py`). The global args include

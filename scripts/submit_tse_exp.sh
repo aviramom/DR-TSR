@@ -7,10 +7,13 @@
 #   bash scripts/submit_tse_exp.sh
 #
 # Runner routing:
-#   random_baseline              → run_single_cpu.sh       (CPU, multits)
+#   random_baseline              → run_single_cpu.sh   (CPU, multits)
 #   Qwen3-8B, Qwen3-VL-8B,
-#   TimeOmni-1-7B                → run_single_gpu.sh       (RTX 4090, multits)
-#   ChatTS-8B-vllm               → run_single_gpu_vllm.sh  (RTX 4090, multits_large)
+#   TimeOmni-1-7B, ChatTS-8B    → run_single_gpu.sh   (RTX 4090, multits)
+#
+# NOTE: ChatTS-8B-vllm is disabled — vLLM 0.19.1 (multits_large) removed VLLM_USE_V1
+# and its V1 TransformersForCausalLM backend crashes on ChatTS weight names.
+# Use bytedance-research/ChatTS-8B (HF wrapper) instead.
 ################################################################################################
 
 SCRIPT_DIR="$(dirname "$0")"
@@ -22,8 +25,8 @@ task_id="TimeSeriesExam"
 batch_size=4
 num_samples=""          # set to e.g. 50 for smoke tests; leave empty for full eval
 
-seeds=(0 1 2)
-shots=(0 1 2)
+seeds=(0)
+shots=(0)
 
 # ---------------------------------------------------------------------------
 # Helper: build common args string
@@ -54,26 +57,18 @@ for seed in "${seeds[@]}"; do
     ((total++))
 done
 
-# --- RTX 4090 (multits): text + vision LLMs ---
+# --- RTX 4090 (multits): text + vision LLMs + ChatTS HF ---
 for method in \
     "Qwen/Qwen3-8B-Instruct" \
     "Qwen/Qwen3-VL-8B-Instruct" \
-    "anton-hugging/TimeOmni-1-7B"
+    "anton-hugging/TimeOmni-1-7B" \
+    "bytedance-research/ChatTS-8B"
 do
     for seed in "${seeds[@]}"; do
         for shot in "${shots[@]}"; do
             sbatch "$SCRIPT_DIR/run_single_gpu.sh" $(common_args "$method" "$seed" "$shot")
             ((total++))
         done
-    done
-done
-
-# --- RTX 4090 (multits_large / vLLM): ChatTS ---
-for seed in "${seeds[@]}"; do
-    for shot in "${shots[@]}"; do
-        sbatch "$SCRIPT_DIR/run_single_gpu_vllm.sh" \
-            $(common_args "bytedance-research/ChatTS-8B-vllm" "$seed" "$shot")
-        ((total++))
     done
 done
 
