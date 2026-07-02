@@ -1,0 +1,72 @@
+{
+  "args": {
+    "exp_id": "smoke_test",
+    "random_seed": 42,
+    "project": "aviramom-/ts-icl",
+    "use_wandb": 0,
+    "override_run": 1,
+    "keys_to_match": [
+      "exp_id",
+      "random_seed",
+      "method",
+      "retrieval_strategies"
+    ],
+    "method": "random_baseline",
+    "cache_dir": null,
+    "quantization": null,
+    "device": "cuda",
+    "low_cpu_mem_usage": true,
+    "batch_size": 1,
+    "display_samples": 2,
+    "qa_dataset_path": "qa_dataset.json",
+    "retrieval_strategies": [
+      "zero_shot",
+      "random"
+    ],
+    "retrieval_k": [
+      0,
+      1,
+      2
+    ],
+    "fusion_alpha": [
+      0.25,
+      0.5,
+      0.75
+    ],
+    "n_splits": 2,
+    "test_fraction": 0.2,
+    "text_encoder": "all-MiniLM-L6-v2",
+    "ts_max_len": 128,
+    "model_type": "random_baseline",
+    "max_seq_length": 4096,
+    "max_new_tokens": 10,
+    "format": "chat",
+    "input_mode": "combined"
+  },
+  "summary": {
+    "random_k1": {
+      "mean": 0.3839472013063594,
+      "std": 0.006463757597750169,
+      "per_split": [
+        0.3904109589041096,
+        0.37748344370860926
+      ]
+    },
+    "random_k2": {
+      "mean": 0.4218452326952735,
+      "std": 0.05760682209924703,
+      "per_split": [
+        0.4794520547945205,
+        0.36423841059602646
+      ]
+    },
+    "zero_shot_k0": {
+      "mean": 0.374353624240225,
+      "std": 0.036605279869364044,
+      "per_split": [
+        0.410958904109589,
+        0.33774834437086093
+      ]
+    }
+  }
+}

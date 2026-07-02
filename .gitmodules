@@ -1,0 +1,4 @@
+[submodule "third_party/TimeSeriesExam"]
+	path = third_party/TimeSeriesExam
+	url = https://github.com/moment-timeseries-foundation-model/TimeSeriesExam.git
+	branch = exam_generation

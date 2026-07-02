@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# W&B
+wandb/
+
+# Results (kept locally, not committed)
+retrieval_results/*.json
+!retrieval_results/*smoke*.json
+outputs/
+
+# Model / data caches
+*.hdf5
+*.pt
+*.bin
+*.safetensors
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
