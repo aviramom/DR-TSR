@@ -38,3 +38,6 @@ outputs/
 
 # macOS
 .DS_Store
+
+# Large dataset files (kept locally)
+qa_dataset.json

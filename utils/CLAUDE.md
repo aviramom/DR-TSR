@@ -1,106 +1,55 @@
 # utils/
 
-Shared utilities for `run_icl.py`. Three active files; nothing here does model inference or data loading.
+Shared infrastructure used by `run_exp.py` and model wrappers.
 
 ---
 
 ## Files
 
-### `args.py` — CLI argument definitions
+### `args.py`
 
-**`get_parser()`** — returns the `ArgumentParser` used by `run_icl.py`.
-
-```python
-parser = get_parser()
-args, _ = parser.parse_known_args()
-```
-
-**`create_parser(notebook=False)`** — convenience wrapper for notebook usage. Calls `get_parser()`,
-parses args, then post-processes: converts `quantization="none"` → `None` and `cache_dir=""` → `None`.
-Not used by `run_icl.py` directly.
-
-Key argument groups:
-
-| Group | Key args |
-|-------|----------|
-| Experiment | `--exp_id`, `--random_seed` |
-| Logging | `--use_wandb`, `--project`, `--override_run`, `--keys_to_match` |
-| Model | `--method`, `--cache_dir`, `--quantization`, `--device` |
-| Data | `--data_path`, `--num_samples` |
-| Task | `--task_id` (`icl_ucr_<Name>` for UCR, `icl_tse_<tid>` for TSE) |
-| ICL | `--num_shots`, `--picking_strategy`, `--use_label_desc`, `--desc_dir` |
-| Inference | `--batch_size`, `--display_samples` |
-| TSE | `--tse_data_path` (path to `qa_dataset_augmented.json`, default: `qa_dataset_augmented.json`), `--tse_test_fraction` (train/test split ratio, default: `0.3`) |
-
----
-
-### `model.py` — model registry
-
-**`method_wrapper_dict`** — maps `--method` string → `BaseModelWrapper` subclass.
+Defines the global CLI argument namespace via `get_parser()` / `create_parser()`.
 
 ```python
-wrapper_class = method_wrapper_dict[args.method]
-args = wrapper_class.get_relevant_args(args, parser)
-model = wrapper_class(args, device=...)
+parser = get_parser()          # returns ArgumentParser
+args   = create_parser()       # parses sys.argv and post-processes defaults
 ```
 
-Optional deps (`ChatTSHFWrapper`, `ChatTSVLLMWrapper`) are wrapped in `try/except ImportError`
-so missing packages don't crash the registry at import time.
+**Key args:**
+
+| Arg | Default | Description |
+|-----|---------|-------------|
+| `--method` | `random_baseline` | Key into `method_wrapper_dict` in `model.py` |
+| `--task_id` | `TimeSeriesExam` | Dataset to evaluate; data path resolved from `configs/data_paths.yaml` |
+| `--num_shots` | `1` | k-shot demonstrations (0 = zero-shot) |
+| `--batch_size` | `1` | Samples per `model.generate()` call |
+| `--num_samples` | `None` | Cap on dataset size for smoke tests |
+| `--display_samples` | `3` | Debug samples printed at end of run |
+| `--exp_id` | `"1"` | Experiment group label (used in W&B deduplication) |
+| `--project` | `aviramom-/DR-TSR` | W&B project (`entity/project`) |
+| `--use_wandb` | `0` | Enable W&B logging |
+| `--override_run` | `1` | Re-run even if a matching finished W&B run exists |
+| `--device` | `cuda` | PyTorch device |
+| `--quantization` | `none` | `4bit` / `8bit` / `none` |
+| `--cache_dir` | `""` → `None` | HuggingFace model cache directory |
+
+**Important constraint**: `BaseModelWrapper.get_relevant_args()` raises `ValueError` if any key
+in a model's `get_args_dict()` already exists in the global namespace. Never add model-specific
+keys (`input_mode`, `max_new_tokens`, `model_type`, etc.) to `get_parser()`.
 
 ---
 
-### `formatting.py` — prompt builder
+### `model.py`
 
-**`icl_classification_format(desc, examples, target, options)`** — assembles the final ICL prompt
-string for a single test sample. Called by `data_provider/icl_dataset.py`.
+Contains `method_wrapper_dict` — the single registry that maps `--method` string IDs to
+`BaseModelWrapper` subclasses.
 
-Output structure:
-```
-Time Series Classification.
-<desc>
-
-<few-shot examples>
-
-<query>
-Return ONLY the label as one of: [class_a, class_b, ...] without any explanation
-```
-
-The literal string `Return ONLY the label as one of: [...]` is load-bearing — `evaluations/icl_ucr_eval.py:_parse_options()` parses it with a regex to recover the valid label list. Do not change the phrasing.
-
-**Options string format** — options are serialized as `[A, B, C]` (no quotes around items).
-This is intentional: Python's default `str(list)` produces `['A', 'B', 'C']` with embedded
-quotes, which causes `_parse_options` to return `["'A'", " 'B'", ...]` (with extra quote chars),
-breaking exact-match against gold labels `"A"`, `"B"`, etc. The fix is in `formatting.py:3`:
 ```python
-options_str = "[" + ", ".join(str(o) for o in options) + "]"
-```
-Do not revert this to `{options}`.
+from utils.model import method_wrapper_dict
 
----
-
-## Planned Retrieval Args (to be added to `args.py`)
-
-When the `retrieval/` module is built, these args will be added to `get_parser()`:
-
-| Arg | Description |
-|-----|-------------|
-| `--pool_path` | Path to demonstration pool JSON |
-| `--retrieval_strategy` | `random` \| `ts_only` \| `text_only` \| `fusion` \| `oracle` |
-| `--retrieval_k` | Number of demonstrations to retrieve (list, e.g. `1 2 3 5 8`) |
-| `--fusion_alpha` | Weight for TS similarity in fusion score (0.0–1.0) |
-| `--n_splits` | Number of cross-template splits for averaging |
-
----
-
-## Fit with `run_icl.py`
-
-```
-run_icl.py
-  ├─ get_parser()                     ← utils/args.py
-  ├─ method_wrapper_dict[args.method] ← utils/model.py
-  └─ (icl_dataset.py calls)
-       └─ icl_classification_format() ← utils/formatting.py
+model_cls = method_wrapper_dict["random_baseline"]   # → RandomBaseline
+model_cls = method_wrapper_dict["Qwen/Qwen3-4B-Instruct-2507"]  # → InstructModel
 ```
 
-`utils/` has no other active files. `cloud_logger.py` and `metrics.py` were removed —
-they were legacy code from a prior project with no callers.
+Adding a new model: import the class and add one or more `"method-id": ModelClass` entries.
+See `models/CLAUDE.md` for the full wrapper overview and batch contract.

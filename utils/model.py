@@ -4,8 +4,6 @@ from models.base_model import BaseModelWrapper
 from models.instruct_model import InstructModel, LargeInstructModel
 from models.image_instruct_model import ImageInstructModel
 from models.qwen_vl_image_model import QwenVLImageModel
-from models.qwen_vl_thinking_model import QwenVLThinkingModel
-from models.qwen_vl_thinking_vllm_model import QwenVLThinkingVLLMModel
 from models.api_model import APIModelWrapper
 
 try:
@@ -27,9 +25,7 @@ except ImportError:
     print("TimeOmni model unavailable — missing dependency")
 
 from models.baselines import (
-    RandomBaseline, KNNBaseline,
-    ZeroedTSBaseline, EmptyTSBaseline, EmptyAllTSBaseline,
-    EmptyAllTSChatTSBaseline, DinoKNNCLSABaseline,
+    RandomBaseline
 )
 
 method_wrapper_dict: Dict[str, BaseModelWrapper] = {
@@ -50,8 +46,6 @@ method_wrapper_dict: Dict[str, BaseModelWrapper] = {
     # --- Vision LLMs (input_mode="separate": receive <ts><ts/> placeholders) ---
     "Qwen/Qwen3.6-27B-image-ts": ImageInstructModel,   # TS → matplotlib plot, vLLM
     "Qwen/Qwen3-VL-8B-Instruct": QwenVLImageModel,     # TS → matplotlib plot, HF
-    "Qwen/Qwen3-VL-8B-Thinking": QwenVLThinkingModel,         # TS → plot, HF, thinking enabled
-    "Qwen/Qwen3-VL-8B-Thinking-vllm": QwenVLThinkingVLLMModel,  # TS → plot, vLLM, thinking enabled
 
     # --- ChatTS (input_mode="separate": patch-embedding TS tokens) ---
     "bytedance-research/ChatTS-8B": ChatTSHFWrapper,
@@ -72,10 +66,5 @@ method_wrapper_dict: Dict[str, BaseModelWrapper] = {
 
     # --- Baselines (CPU / no weights) ---
     "random_baseline": RandomBaseline,
-    "knn_baseline": KNNBaseline,
-    "zeroed_ts_baseline": ZeroedTSBaseline,
-    "empty_ts_baseline": EmptyTSBaseline,
-    "empty_all_ts_baseline": EmptyAllTSBaseline,        # needs --quantization 8bit
-    "empty_all_ts_chatts_baseline": EmptyAllTSChatTSBaseline,
-    "dino_knn_clsa_baseline": DinoKNNCLSABaseline,      # delay-embed + DINOv2-Large 1-NN
+
 }

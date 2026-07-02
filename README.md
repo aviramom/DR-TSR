@@ -1,109 +1,116 @@
 # DR-TSR — Demonstration Retrieval for Time Series Reasoning
 
-Research project studying **utility-aware demonstration retrieval for in-context learning (ICL)** on time series reasoning tasks. Given a pool of labeled (time series, question, answer) triples, the goal is to select which *k* demonstrations to place in a frozen LLM's context to maximize MCQ accuracy on a new, unseen query — without any gradient updates.
+Research codebase for studying utility-aware in-context learning (ICL) for time series
+reasoning benchmarks. The central question: given a fixed budget of *k* demonstrations,
+which examples maximally improve a frozen LLM's accuracy on a new query?
 
-See [`research_proposal.md`](research_proposal.md) for the full motivation, related work, and experimental design.
+See [`research_proposal.md`](research_proposal.md) for the full problem statement, related
+work survey, and experiment plan.
 
 ---
 
-## Quick Start — Experiment 1 (Retrieval Baseline Study)
+## Setup
 
 ```bash
-# Smoke test: random baseline, no GPU needed
-python run_retrieval.py \
-  --method random_baseline \
-  --n_splits 2 \
-  --retrieval_strategies random zero_shot oracle \
-  --retrieval_k 0 1 3 \
-  --display_samples 2
+conda activate multits
+pip install -r requirements.txt
+```
 
-# Full Experiment 1: all 6 conditions × k ∈ {0,1,2,3,5,8} × 5 splits
-python run_retrieval.py \
-  --method Qwen/Qwen3-4B-Instruct-2507 \
-  --cache_dir /cs/azencot_fsas/aviramom \
-  --n_splits 5 \
-  --retrieval_strategies all \
-  --retrieval_k 0 1 2 3 5 8 \
-  --fusion_alpha 0.25 0.5 0.75 \
-  --use_wandb 1 --project aviramom-/DR-TSR --exp_id retrieval_baseline
+For vLLM-backed large models (e.g. `Qwen/Qwen3.6-27B`):
+```bash
+pip install vllm>=0.8
+```
+
+For cloud API models:
+```bash
+pip install openai anthropic google-generativeai
 ```
 
 ---
 
-## Dataset
+## Quick Start
 
-**TimeSeriesExam** (`qa_dataset.json`) — 763 MCQ instances across 98 templates, 5 categories.
-
-To generate additional TS variants per template (for augmented pool):
+**Zero-shot random baseline (no GPU needed):**
 ```bash
-python scripts/generate_tse_augmented.py \
-  --tse_repo third_party/TimeSeriesExam \
-  --output qa_dataset_augmented.json \
-  --num_variants 10
+python run_exp.py \
+    --method random_baseline \
+    --task_id TimeSeriesExam \
+    --num_shots 0 \
+    --num_samples 50
 ```
 
----
+**Small text LLM, 1-shot, with W&B logging:**
+```bash
+python run_exp.py \
+    --method Qwen/Qwen3-4B-Instruct-2507 \
+    --task_id TimeSeriesExam \
+    --num_shots 1 \
+    --use_wandb 1 \
+    --exp_id exp1_baseline
+```
 
-## Retrieval Conditions (Experiment 1)
+**Cloud API model:**
+```bash
+python run_exp.py \
+    --method anthropic \
+    --task_id TimeSeriesExam \
+    --num_shots 0
+```
 
-| Condition | `--retrieval_strategies` value | Description |
-|---|---|---|
-| Zero-shot (k=0) | `zero_shot` | No demonstrations |
-| Random-k | `random` | k demos sampled uniformly from pool |
-| TS-only top-k | `ts_only` | Top-k by TS shape similarity (L2-normalized cosine) |
-| Text-only top-k | `text_only` | Top-k by sentence embedding cosine similarity |
-| Fusion (α sweep) | `fusion` | Score = α·TS_sim + (1−α)·text_sim |
-| Same-category oracle | `oracle` | Upper bound — pool restricted to same category |
-
-Use `--retrieval_strategies all` to run all six.
-
----
-
-## Models
-
-| `--method` | Type | Hardware |
-|---|---|---|
-| `random_baseline` | Random | CPU |
-| `Qwen/Qwen3-4B-Instruct-2507` | Text LLM | RTX 4090 |
-| `Qwen/Qwen3.6-27B` | Large text LLM | 2× RTX 6000 (vLLM) |
-| `Qwen/Qwen3-VL-8B-Instruct` | Vision LLM (TS→image) | RTX 4090 |
-| `bytedance-research/ChatTS-8B` | TS-native LLM | RTX 4090 |
-| `anthropic` / `openai` / `gemini` | API models | — |
+Data paths are resolved automatically from [`configs/data_paths.yaml`](configs/data_paths.yaml) —
+no `--data_path` argument needed.
 
 ---
 
-## Directory Structure
+## Available Models
+
+| `--method` | Backend | Notes |
+|------------|---------|-------|
+| `random_baseline` | none | Uniform random label |
+| `knn_baseline` | DTW | 1-NN by series shape |
+| `dino_knn_clsa_baseline` | DINOv2-Large | 1-NN by plotted series image |
+| `Qwen/Qwen3-4B-Instruct-2507` | HF | Also: `Qwen3-8B`, Llama, Mistral variants |
+| `Qwen/Qwen3.6-27B` | vLLM | Also: `-FP8` |
+| `Qwen/Qwen3-VL-8B-Instruct` | HF Vision | TS rendered as image |
+| `bytedance-research/ChatTS-8B` | HF | Also: `-14B`, `-vllm` variants |
+| `anton-hugging/TimeOmni-1-7B` | HF | Qwen2.5-7B base |
+| `openai` / `anthropic` / `gemini` | REST API | Set API key in `.env` |
+
+Full list and details in [`models/CLAUDE.md`](models/CLAUDE.md).
+
+---
+
+## Project Structure
 
 ```
 DR-TSR/
-├── run_retrieval.py          # Entry point — Experiment 1 orchestrator
-├── qa_dataset.json           # TimeSeriesExam dataset (763 instances, 98 templates)
-├── research_proposal.md      # Full research proposal
-│
-├── retrieval/                # Core retrieval module
-│   ├── dataset.py            # TSEItem, load_tse_items(), cross_template_split()
-│   ├── indices.py            # TSIndex (shape similarity), TextIndex (sentence embeddings)
-│   ├── prompt.py             # build_retrieval_prompt() — ICL prompt builder
-│   └── strategies.py        # retrieve() — routes to zero_shot/random/ts_only/text_only/fusion/oracle
-│
-├── evaluations/
-│   ├── tse_retrieval_eval.py # run_evaluation_retrieval() — eval loop for one (strategy, k)
-│   └── icl_ucr_eval.py       # _extract_predicted_label() — shared label extraction
-│
-├── models/                   # Model wrappers (all implement BaseModelWrapper)
-├── utils/                    # args.py (get_retrieval_parser), model.py (registry)
-├── loggers/                  # W&B + print logging
-├── scripts/                  # generate_tse_augmented.py
-├── third_party/TimeSeriesExam/  # TSE generation code (git submodule)
-└── retrieval_results/        # Output JSONs (gitignored except smoke-test references)
+├── run_exp.py              ← Experiment entry point
+├── configs/
+│   └── data_paths.yaml     ← task_id → dataset file path
+├── data_provider/          ← Dataset wrappers
+├── evaluations/            ← Eval loops + ICL prompt builder
+├── models/                 ← All model wrappers and baselines
+├── loggers/                ← W&B + tqdm logging
+├── utils/                  ← CLI args + model registry
+├── third_party/
+│   └── TimeSeriesExam/     ← Upstream dataset generation code
+└── qa_dataset.json         ← TimeSeriesExam dataset (746 questions)
 ```
+
+Each directory contains a `CLAUDE.md` with detailed documentation.
 
 ---
 
-## W&B
+## Adding a New Dataset
 
-```bash
-python run_retrieval.py --use_wandb 1 --project aviramom-/DR-TSR --exp_id retrieval_baseline ...
-```
+1. Add the data path to `configs/data_paths.yaml`.
+2. Create `data_provider/<name>_data.py` following the batch contract in [`data_provider/CLAUDE.md`](data_provider/CLAUDE.md).
+3. Add `evaluate_<name>` in `evaluations/<name>_eval.py`.
+4. Wire both into `run_exp.py:_build_dataset` and `_get_eval_fn`.
 
-Results per condition and k are logged with keys: `retrieval_strategy`, `fusion_alpha`, `k`, `split_idx`.
+## Adding a New Model
+
+1. Create `models/<name>.py` subclassing `BaseModelWrapper`.
+2. Register it in `utils/model.py:method_wrapper_dict`.
+
+See [`models/CLAUDE.md`](models/CLAUDE.md) for the full wrapper contract.

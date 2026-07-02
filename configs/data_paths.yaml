@@ -1,0 +1,4 @@
+# Data paths per task_id.
+# Add an entry here whenever a new dataset is integrated.
+
+TimeSeriesExam: /home/aviramom/projects/DR-TSR/qa_dataset.json

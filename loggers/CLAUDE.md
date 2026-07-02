@@ -52,6 +52,6 @@ results per condition and per k can be filtered and plotted from W&B.
 | Arg | Effect |
 |-----|--------|
 | `--use_wandb 1` | Enable W&B logging |
-| `--project aviramom-/ts-icl` | W&B project (`entity/project`) |
+| `--project aviramom-/DR-TSR` | W&B project (`entity/project`) |
 | `--exp_id <name>` | Experiment group name, included in deduplication keys |
 | `--override_run 1` | Re-run even if a matching finished run already exists (default: 1) |

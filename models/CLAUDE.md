@@ -13,11 +13,10 @@ in `utils/model.py:method_wrapper_dict` under one or more `--method` IDs.
 | `instruct_model.py` | `LargeInstructModel` | `Qwen/Qwen3.6-27B`, `-FP8` | vLLM (falls back to HF) | `input_text` |
 | `image_instruct_model.py` | `ImageInstructModel` | `Qwen/Qwen3.6-27B-image-ts` | vLLM multimodal | `input_text`, `input_ts` |
 | `qwen_vl_image_model.py` | `QwenVLImageModel` | `Qwen/Qwen3-VL-8B-Instruct` | HF Vision2Seq | `input_text`, `input_ts` |
-| `qwen_vl_thinking_model.py` | `QwenVLThinkingModel` | `Qwen/Qwen3-VL-8B-Thinking` | HF Vision2Seq + thinking | `input_text`, `input_ts` |
-| `qwen_vl_thinking_vllm_model.py` | `QwenVLThinkingVLLMModel` | `Qwen/Qwen3-VL-8B-Thinking-vllm` | vLLM + thinking | `input_text`, `input_ts` |
 | `chatts_model.py` | `ChatTSHFWrapper` | `bytedance-research/ChatTS-8B`, `-14B` | HF | `input_text`, `input_ts` |
 | `vllm_chatts_model.py` | `ChatTSVLLMWrapper` | `bytedance-research/ChatTS-8B-vllm`, `-14B-vllm` | vLLM | `input_text`, `input_ts` |
-| `api_model.py` | `APIModelWrapper` | `openai`, `anthropic`, `gemini`, `deepseek_v3`, `ollama` | REST API | `input_text` |
+| `time_omni_model.py` | `TimeOmniHFWrapper` | `anton-hugging/TimeOmni-1-7B` | HF (Qwen2.5-7B base) | `input_text` |
+| `api_model.py` | `APIModelWrapper` | `openai`, `openai_o1`, `anthropic`, `gemini`, `deepseek_v3`, `ollama` | REST API | `input_text` |
 | `baselines.py` | `RandomBaseline` | `random_baseline` | none | `input_text` (parses options) |
 | `baselines.py` | `KNNBaseline` | `knn_baseline` | DTW | `input_text`, `input_ts` |
 | `baselines.py` | `DinoKNNCLSABaseline` | `dino_knn_clsa_baseline` | DINOv2-Large | `input_text`, `input_ts` |
@@ -30,27 +29,29 @@ in `utils/model.py:method_wrapper_dict` under one or more `--method` IDs.
 
 ## Batch Contract
 
-`ICLUCRDataset` produces batches with these keys:
+All batch fields are always present. What each model reads depends on its `input_mode`.
 
 ```
-input_text   str   Full prompt with TS already embedded as "[v1, v2, ...]"
-input_ts     list  [support_ts_0, ..., support_ts_k-1, query_ts]  (raw floats)
-output_text  str   Gold label (int as string)
-task_id      str   e.g. "icl_ucr_GunPoint"
-options      list  Valid class labels parsed from prompt
-mean/std     list  Per-series stats (metadata only, not used by models)
+input_text   str   combined mode: full prompt with TS as "[v1, v2, ...]" numeric text
+                   separate mode: prompt with <ts><ts/> placeholders for each series
+input_ts     list  [demo_ts_0, ..., demo_ts_k-1, query_ts]  (raw float arrays)
+output_text  str   Gold label
+task_id      str   e.g. "retrieval"
+options      list  Valid option letters for this sample
 ```
 
-**Text models** (`InstructModel`, `LargeInstructModel`, `APIModelWrapper`, baselines):
-consume `input_text` only. TS values are already in the text as numeric arrays.
+The `input_mode` field in each model's `get_args_dict()` tells the eval loop how to deliver TS:
 
-**Image models** (`ImageInstructModel`, `QwenVLImageModel`):
-split `input_text` on `<ts><ts/>` placeholders to know where to insert matplotlib
-plots. They also consume `input_ts` for the raw values to plot.
+**`input_mode = "combined"`** (`InstructModel`, `LargeInstructModel`, `TimeOmniHFWrapper`, `APIModelWrapper`, text baselines):
+`input_text` already contains TS as numeric arrays; `input_ts` is ignored.
 
-**ChatTS models** (`ChatTSHFWrapper`, `ChatTSVLLMWrapper`):
-strip the embedded numeric arrays from `input_text` (via `ts_parser`), rebuild
-placeholders, then pass raw arrays from `input_ts` to the processor.
+**`input_mode = "separate"`** (`ImageInstructModel`, `QwenVLImageModel`, `ChatTSHFWrapper`, `ChatTSVLLMWrapper`, `DinoKNNCLSABaseline`):
+`input_text` contains `<ts><ts/>` placeholders; raw arrays are in `input_ts`.
+- Image models replace each placeholder with a matplotlib plot.
+- ChatTS models pass `input_ts` arrays to the patch-embedding processor.
+- `DinoKNNCLSABaseline` reads `input_ts` directly (ignores `input_text` for TS).
+
+`KNNBaseline` declares `input_mode = "combined"` but also reads `input_ts` for DTW distance — both fields must be valid.
 
 ---
 
@@ -62,8 +63,6 @@ placeholders, then pass raw arrays from `input_ts` to the processor.
 - **`EmptyAllTSBaseline`**: needs `--quantization 8bit` to fit Qwen3-4B on a single RTX 4090.
 - **`DinoKNNCLSABaseline`**: normalises TS to [0, 1] using support-set min/max (CLSA protocol) before embedding.
 - All LLM wrappers strip `<think>...</think>` from Qwen3/3.6 reasoning-model outputs.
-- **Thinking models** (`QwenVLThinkingModel`, `QwenVLThinkingVLLMModel`): use `skip_special_tokens=False` so `</think>` survives decoding, then split on it to return only the answer section. `thinking_budget=2048` (soft hint via `apply_chat_template`). **Do not reduce below 2048** — smaller budgets cause the model to close `</think>` prematurely and restart reasoning in the answer section, producing INVALID_PREDICTION.
-- `-vllm` suffix on the method ID is stripped internally; the same `Qwen/Qwen3-VL-8B-Instruct` checkpoint is loaded for both `Qwen/Qwen3-VL-8B-Thinking` and `Qwen/Qwen3-VL-8B-Thinking-vllm`.
 
 ---
 
