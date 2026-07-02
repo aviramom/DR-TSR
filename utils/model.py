@@ -30,7 +30,6 @@ from models.baselines import (
 
 method_wrapper_dict: Dict[str, BaseModelWrapper] = {
     # --- Small text LLMs (HF, single RTX 4090) ---
-    "Qwen/Qwen3-8B-Instruct": InstructModel,
     "Qwen/Qwen3-8B-Instruct-2507": InstructModel,
     "Qwen/Qwen3-4B-Instruct-2507": InstructModel,
     "Qwen/Qwen3-0.6B": InstructModel,

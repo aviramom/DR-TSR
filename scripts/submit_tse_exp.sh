@@ -59,7 +59,7 @@ done
 
 # --- RTX 4090 (multits): text + vision LLMs + ChatTS HF ---
 for method in \
-    "Qwen/Qwen3-8B-Instruct" \
+    "Qwen/Qwen3-8B-Instruct-2507" \
     "Qwen/Qwen3-VL-8B-Instruct" \
     "anton-hugging/TimeOmni-1-7B" \
     "bytedance-research/ChatTS-8B"
