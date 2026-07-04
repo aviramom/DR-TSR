@@ -207,6 +207,7 @@ def evaluate_tse(
     item_ids: List[int] = []
     input_prompts: List[str] = []
     input_ts_list: List[List[List[float]]] = []
+    questions: List[str] = []
 
     for chunk in tqdm(list(_batched(all_items, batch_size)), desc="Evaluating TSE"):
         batch = _collate(chunk)
@@ -226,6 +227,7 @@ def evaluate_tse(
             item_ids.append(item["id"])
             input_prompts.append(item["input_text"])
             input_ts_list.append(item["input_ts"])
+            questions.append(item.get("question", ""))
 
     # ---- Metrics ------------------------------------------------------------
     n = len(gold_answers)
@@ -255,6 +257,7 @@ def evaluate_tse(
     # ---- Artifacts ----------------------------------------------------------
     artifacts: Dict[str, Any] = {
         "item_ids": item_ids,
+        "questions": questions,
         "input_prompts": input_prompts,
         "generated_texts": generated_texts,
         "predicted_answers": predicted_answers,

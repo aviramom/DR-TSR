@@ -22,8 +22,8 @@ cache_dir="/cs/azencot_fsas/aviramom"
 project="aviramom-/DR-TSR"
 exp_id="baseline_comparison_v1"
 task_id="TimeSeriesExam"
-batch_size=4
-num_samples=""          # set to e.g. 50 for smoke tests; leave empty for full eval
+batch_size=1
+num_samples=""      # set to e.g. 50 for smoke tests; leave empty for full eval
 
 seeds=(0)
 shots=(0)
@@ -59,9 +59,8 @@ done
 
 # --- RTX 4090 (multits): text + vision LLMs + ChatTS HF ---
 for method in \
-    "Qwen/Qwen3-8B-Instruct-2507" \
+    "Qwen/Qwen3-8B" \
     "Qwen/Qwen3-VL-8B-Instruct" \
-    "anton-hugging/TimeOmni-1-7B" \
     "bytedance-research/ChatTS-8B"
 do
     for seed in "${seeds[@]}"; do

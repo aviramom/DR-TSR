@@ -37,8 +37,8 @@ class InstructModel(BaseModelWrapper):
     def get_args_dict() -> Dict[str, Any]:
         return {
             "model_type": "instruct",
-            "max_seq_length": 4096,
-            "max_new_tokens": 50,
+            "max_seq_length": 32768,
+            "max_new_tokens": 10,
             "format": "chat",
             "input_mode": "combined",
         }

@@ -2,12 +2,11 @@
 TimeOmniHFWrapper — anton-hugging/TimeOmni-1-7B (Qwen2.5-7B-Instruct base).
 
 Time series are passed as numeric arrays embedded in the prompt text
-(input_mode="combined"), identical to InstructModel.  The model generates
-<think>...</think><answer>X</answer> output; _extract_answer strips the
-reasoning block and returns only the answer content to the evaluator.
+(input_mode="combined"), identical to InstructModel.  Uses the original
+training system prompt and hard-coded Qwen chat format (bypasses
+apply_chat_template, which is unreliable for this checkpoint).
 """
 
-import re
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -70,8 +69,28 @@ class TimeOmniHFWrapper(BaseModelWrapper):
 
         return self.model, self.tokenizer
 
+    # Exact system prompt the model was trained with (AntonGuan/TimeOmni-1 repo).
+    _SYSTEM_PROMPT = (
+        "Output Format:\n"
+        "<think>Your step-by-step reasoning process that justifies your answer</think>\n"
+        "<answer>Your final answer"
+        "(Note: Only output a single uppercase letter of the correct option)</answer>"
+    )
+
+    @staticmethod
+    def _build_prompt(system: str, question: str) -> str:
+        # Hard-coded Qwen chat format — mirrors build_legacy_prompt from the
+        # TimeOmni-1 repo. More reliable than apply_chat_template for this
+        # checkpoint because it bypasses any jinja2 template issues.
+        return (
+            f"<|im_start|>system\n{system}<|im_end|>\n"
+            f"<|im_start|>user\n{question}<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+
     @staticmethod
     def _extract_answer(text: str) -> str:
+        import re
         if "</think>" in text:
             text = text.split("</think>", 1)[1]
         m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL | re.IGNORECASE)
@@ -89,37 +108,32 @@ class TimeOmniHFWrapper(BaseModelWrapper):
         if self.model is None or self.tokenizer is None:
             self.load_model()
 
-        prompts = batch["input_text"]
+        formatted = [
+            self._build_prompt(self._SYSTEM_PROMPT, q)
+            for q in batch["input_text"]
+        ]
 
-        def _apply_template(q: str) -> str:
-            try:
-                return self.tokenizer.apply_chat_template(
-                    [{"role": "user", "content": q}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-            except TypeError:
-                return self.tokenizer.apply_chat_template(
-                    [{"role": "user", "content": q}],
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-
-        formatted = [_apply_template(q) for q in prompts]
-
+        # add_special_tokens=False: the formatted string already contains all
+        # Qwen special tokens (<|im_start|> etc); letting the tokenizer add more
+        # would corrupt the prompt structure.
         inputs = self.tokenizer(
             formatted,
             return_tensors="pt",
             padding=True,
             truncation=True,
             max_length=self.args.max_seq_length,
+            add_special_tokens=False,
         ).to(self.device)
 
         with torch.no_grad():
             output_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=self.args.max_new_tokens,
-                do_sample=False,
+                do_sample=True,
+                temperature=0.1,
+                top_p=0.001,
+                top_k=20,
+                repetition_penalty=1.05,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
                 **generate_kwargs,

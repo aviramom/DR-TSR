@@ -125,6 +125,7 @@ class ChatTSHFWrapper(BaseModelWrapper):
        
 
         return self.model, self.tokenizer
+        
 
     def _build_prompt(self, user_text: str) -> str:
         """Wraps the user query in the ChatTS specific prompt template."""

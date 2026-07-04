@@ -107,6 +107,7 @@ class TimeSeriesExamDataset:
         input_mode: str = "combined",
         ts_precision: int = 4,
         num_samples: Optional[int] = None,
+        category: Optional[str] = None,
     ):
         if input_mode not in ("combined", "separate"):
             raise ValueError(
@@ -118,6 +119,9 @@ class TimeSeriesExamDataset:
 
         with open(data_path) as f:
             raw: List[Dict[str, Any]] = json.load(f)
+
+        if category is not None:
+            raw = [r for r in raw if r.get("category") == category]
 
         if num_samples is not None:
             raw = raw[:num_samples]

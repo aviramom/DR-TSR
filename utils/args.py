@@ -19,7 +19,7 @@ def get_parser() -> argparse.ArgumentParser:
                         default=["exp_id", "random_seed", "task_id", "method", "prompt_format"])
 
     # Model
-    parser.add_argument("--method", type=str, default="random_baseline")
+    parser.add_argument("--method", type=str, default="bytedance-research/ChatTS-8B")
     parser.add_argument("--model_path", type=str, default="")
     parser.add_argument("--cache_dir", type=str, default="")
     parser.add_argument("--quantization", type=str, choices=["none", "4bit", "8bit"],
@@ -30,6 +30,10 @@ def get_parser() -> argparse.ArgumentParser:
     # Data
     parser.add_argument("--num_samples", type=int, default=None,
                         help="Max test samples per run (None = all)")
+    parser.add_argument("--category", type=str, default=None,
+                        help="Filter to a single TSE category, e.g. 'Similarity Analysis'")
+    parser.add_argument("--results_dir", type=str, default="results",
+                        help="Directory to write per-run prediction JSON files")
 
     # Task
     parser.add_argument("--task_id", type=str, default="TimeSeriesExam",

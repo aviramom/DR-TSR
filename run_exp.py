@@ -7,6 +7,8 @@ Usage:
 Data paths are resolved automatically from configs/data_paths.yaml.
 """
 
+import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -44,6 +46,7 @@ def _build_dataset(args, input_mode: str, data_paths: Dict[str, str]):
             data_path=path,
             input_mode=input_mode,
             num_samples=args.num_samples,
+            category=getattr(args, "category", None),
         )
     raise ValueError(f"Unknown task_id: {task!r}")
 
@@ -76,6 +79,34 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
     for k in sorted(flat):
         v = flat[k]
         print(f"  {k:<{width}}  {v:.4f}" if isinstance(v, float) else f"  {k:<{width}}  {v}")
+
+
+def _save_results(args, artifacts: Dict[str, Any]) -> None:
+    results_dir = Path(args.results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    slug = re.sub(r"[^a-zA-Z0-9_\-]", "_", f"{args.exp_id}__{args.method}__{args.task_id}__seed{args.random_seed}")
+    out_path = results_dir / f"{slug}.json"
+
+    rows = [
+        {
+            "id":               artifacts["item_ids"][i],
+            "category":         artifacts["categories"][i],
+            "subcategory":      artifacts["subcategories"][i],
+            "difficulty":       artifacts["difficulties"][i],
+            "question":         artifacts["questions"][i],
+            "gold_answer":      artifacts["gold_answers"][i],
+            "predicted_answer": artifacts["predicted_answers"][i],
+            "generated_text":   artifacts["generated_texts"][i],
+            "correct":          bool(artifacts["correct"][i]),
+        }
+        for i in range(len(artifacts["item_ids"]))
+    ]
+
+    with open(out_path, "w") as f:
+        json.dump(rows, f, indent=2)
+
+    print(f"[run_exp] Results saved → {out_path}  ({len(rows)} rows)")
 
 
 def _print_samples(artifacts: Dict[str, Any], n: int) -> None:
@@ -161,7 +192,10 @@ def main():
     _print_metrics(metrics)
     logger.log_metrics(_flatten_metrics(metrics))
 
-    # 10. Debug samples
+    # 10. Save per-sample predictions
+    _save_results(args, artifacts)
+
+    # 11. Debug samples
     _print_samples(artifacts, n=args.display_samples)
 
     logger.stop()
