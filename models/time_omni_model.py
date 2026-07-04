@@ -13,6 +13,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from models.base_model import BaseModelWrapper
+from utils.ts_serialize import fill_ts_placeholders
 
 
 class TimeOmniHFWrapper(BaseModelWrapper):
@@ -32,7 +33,6 @@ class TimeOmniHFWrapper(BaseModelWrapper):
             "max_seq_length": 4096,
             "max_new_tokens": 512,
             "format": "chat",
-            "input_mode": "combined",
         }
 
     def load_model(self, model_path: Optional[str] = None, cache_dir: Optional[str] = None):
@@ -108,9 +108,11 @@ class TimeOmniHFWrapper(BaseModelWrapper):
         if self.model is None or self.tokenizer is None:
             self.load_model()
 
+        input_texts = batch["input_text"]
+        input_ts_list = batch.get("input_ts", [[] for _ in input_texts])
         formatted = [
-            self._build_prompt(self._SYSTEM_PROMPT, q)
-            for q in batch["input_text"]
+            self._build_prompt(self._SYSTEM_PROMPT, fill_ts_placeholders(q, ts))
+            for q, ts in zip(input_texts, input_ts_list)
         ]
 
         # add_special_tokens=False: the formatted string already contains all

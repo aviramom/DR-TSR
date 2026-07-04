@@ -12,29 +12,14 @@ Every item returned by a dataset is a dict with these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `input_text` | `str` | Full prompt. In **combined** mode the TS values are serialized as numeric text (`[v1, v2, ...]`). In **separate** mode each series is replaced by a `<ts><ts/>` placeholder. |
-| `input_ts` | `list[list[float]]` | Raw float arrays, one per series in the sample, in the same order as the placeholders / serialized blocks in `input_text`. Always populated regardless of mode so models that read raw arrays (e.g. `KNNBaseline`, `ChatTSHFWrapper`) work in both modes. |
+| `input_text` | `str` | Full prompt. Each series is represented by a `<ts><ts/>` placeholder. Text-only models call `fill_ts_placeholders()` in their `generate()` to substitute numeric arrays; multimodal models replace placeholders with images or patch tokens. |
+| `input_ts` | `list[list[float]]` | Raw float arrays, one per series in the sample, in the same order as the placeholders in `input_text`. |
 | `output_text` | `str` | Correct option letter (`'A'`, `'B'`, …). |
 | `task_id` | `str` | Dataset identifier (e.g. `'TimeSeriesExam'`). |
 | `options` | `list[str]` | Valid option letters for this sample (e.g. `['A', 'B', 'C']`). |
 
 Additional metadata fields (category, tid, etc.) are dataset-specific and
 documented in the per-file sections below.
-
-### input_mode
-
-`input_mode` is passed to the dataset constructor:
-
-- **`"combined"`** — used by `InstructModel`, `LargeInstructModel`,
-  `APIModelWrapper`, `RandomBaseline`, `KNNBaseline`.
-  `input_text` carries the full numeric TS; `input_ts` is also populated for
-  models that need raw arrays (e.g. `KNNBaseline` for DTW).
-
-- **`"separate"`** — used by `ImageInstructModel`, `QwenVLImageModel`,
-  `ChatTSHFWrapper`, `ChatTSVLLMWrapper`, `DinoKNNCLSABaseline`.
-  `input_text` has one `<ts><ts/>` per series. Image models render each
-  array as a matplotlib plot; ChatTS models pass the arrays to their patch
-  processor. The number of `<ts><ts/>` tokens must equal `len(input_ts[i])`.
 
 ---
 
@@ -48,8 +33,6 @@ Wraps `qa_dataset.json` (746 items from the TimeSeriesExam benchmark).
 ```python
 TimeSeriesExamDataset(
     data_path: str = "qa_dataset.json",
-    input_mode: str = "combined",   # "combined" | "separate"
-    ts_precision: int = 4,          # decimal places for combined serialization
     num_samples: int | None = None, # cap for quick smoke tests
 )
 ```
@@ -86,9 +69,9 @@ batch = ds.as_batch(indices=[0, 3, 7])  # subset
 tids  = ds.get_field("tid")             # one field across all items
 ```
 
-**Prompt format** (combined, single-series):
+**Prompt format** (single-series):
 ```
-Time Series: [1.0680, -0.3076, ...]
+Time Series: <ts><ts/>
 
 Question: What is the type of the trend of the given time series?
 A) Exponential

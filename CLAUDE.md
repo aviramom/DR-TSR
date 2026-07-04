@@ -63,18 +63,15 @@ Every dataset item and every model input/output flows through a single dict form
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `input_text` | `str` | Full prompt (TS as numeric text in combined mode; `<ts><ts/>` placeholders in separate mode) |
+| `input_text` | `str` | Full prompt with `<ts><ts/>` placeholders for each series |
 | `input_ts` | `list[list[float]]` | Raw float arrays, one per series — always populated |
 | `output_text` | `str` | Gold option letter (`'A'`, `'B'`, …) |
 | `task_id` | `str` | Dataset identifier |
 | `options` | `list[str]` | Valid option letters for this sample |
 
-### input_mode
+### TS serialization
 
-Set by each model's `get_args_dict()` — the dataset is constructed to match.
-
-- **`"combined"`** — TS serialized as `[v1, v2, ...]` in `input_text`. Used by text LLMs and API models.
-- **`"separate"`** — `input_text` has `<ts><ts/>` placeholders; raw arrays in `input_ts`. Used by image and ChatTS models.
+The dataset always produces `<ts><ts/>` placeholders. Text-only models call `fill_ts_placeholders(input_text, input_ts)` from `utils/ts_serialize.py` inside `generate()` to substitute numeric arrays before inference. Multimodal models (image, ChatTS) consume the placeholders natively.
 
 ### Model registration
 

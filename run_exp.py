@@ -33,7 +33,7 @@ def _load_data_paths() -> Dict[str, str]:
 # Dataset / eval dispatch
 # ---------------------------------------------------------------------------
 
-def _build_dataset(args, input_mode: str, data_paths: Dict[str, str]):
+def _build_dataset(args, data_paths: Dict[str, str]):
     task = args.task_id
     if task not in data_paths:
         raise ValueError(
@@ -44,7 +44,6 @@ def _build_dataset(args, input_mode: str, data_paths: Dict[str, str]):
     if task == "TimeSeriesExam":
         return TimeSeriesExamDataset(
             data_path=path,
-            input_mode=input_mode,
             num_samples=args.num_samples,
             category=getattr(args, "category", None),
         )
@@ -169,10 +168,9 @@ def main():
     model = model_cls(args, device=args.device)
     model.load_model()
 
-    # 6. Dataset — input_mode is model-specific (set by get_args_dict)
-    input_mode = getattr(args, "input_mode", "combined")
-    dataset = _build_dataset(args, input_mode=input_mode, data_paths=data_paths)
-    print(f"[run_exp] dataset={args.task_id}  n={len(dataset)}  input_mode={input_mode}")
+    # 6. Dataset
+    dataset = _build_dataset(args, data_paths=data_paths)
+    print(f"[run_exp] dataset={args.task_id}  n={len(dataset)}")
 
     # 7. Retriever — not implemented yet
     retriever = None

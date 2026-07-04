@@ -12,6 +12,7 @@ from torchvision import transforms as pth_transforms
 from models.base_model import BaseModelWrapper
 from models.instruct_model import InstructModel
 from models.chatts_model import ChatTSHFWrapper
+from utils.ts_serialize import fill_ts_placeholders
 
 
 class RandomBaseline(BaseModelWrapper):
@@ -28,16 +29,17 @@ class RandomBaseline(BaseModelWrapper):
             "max_seq_length": 4096,
             "max_new_tokens": 10,
             "format": "chat",
-            "input_mode": "combined",
         }
 
     def load_model(self):
         pass
 
     def generate(self, batch, max_new_tokens: int = 10, **kwargs) -> List[str]:
-        prompts = batch["input_text"]
-        if isinstance(prompts, str):
-            prompts = [prompts]
+        raw_texts = batch["input_text"]
+        if isinstance(raw_texts, str):
+            raw_texts = [raw_texts]
+        input_ts_list = batch.get("input_ts", [[] for _ in raw_texts])
+        prompts = [fill_ts_placeholders(t, ts) for t, ts in zip(raw_texts, input_ts_list)]
         batch_options = batch.get("options", [])
         results = []
         for i, prompt in enumerate(prompts):

@@ -15,6 +15,7 @@ except Exception:
 
 # Correct base wrapper import
 from models.base_model import BaseModelWrapper
+from utils.ts_serialize import fill_ts_placeholders
 
 # Optional SDK imports (handled gracefully if missing)
 try:
@@ -101,7 +102,6 @@ class APIModelWrapper(BaseModelWrapper):
             "timeout": 30,
             "base_url": "https://api.siliconflow.com/v1",  # used for DeepSeek (SiliconFlow),
             "model_type": "api",
-            "input_mode": "combined",
             "llm_id": "qwen3:235b",
             "ollama_url": "https://cis-ollama/api/chat",
             "think": True,
@@ -218,7 +218,9 @@ class APIModelWrapper(BaseModelWrapper):
 
         # Accept either the common dict batch {"input_text": [...]} or a raw list[str]
         if isinstance(batch, dict):
-            batch_content = batch.get("input_text") or batch.get("full_text") or []
+            raw_texts = batch.get("input_text") or batch.get("full_text") or []
+            input_ts_list = batch.get("input_ts", [[] for _ in raw_texts])
+            batch_content = [fill_ts_placeholders(t, ts) for t, ts in zip(raw_texts, input_ts_list)]
         else:
             batch_content = batch
 

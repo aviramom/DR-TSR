@@ -29,29 +29,21 @@ in `utils/model.py:method_wrapper_dict` under one or more `--method` IDs.
 
 ## Batch Contract
 
-All batch fields are always present. What each model reads depends on its `input_mode`.
+All batch fields are always present. The dataset always produces `<ts><ts/>` placeholders in `input_text`; models decide how to consume them.
 
 ```
-input_text   str   combined mode: full prompt with TS as "[v1, v2, ...]" numeric text
-                   separate mode: prompt with <ts><ts/> placeholders for each series
-input_ts     list  [demo_ts_0, ..., demo_ts_k-1, query_ts]  (raw float arrays)
+input_text   str   prompt with <ts><ts/> placeholders for each series
+input_ts     list  raw float arrays, one per series (same order as placeholders)
 output_text  str   Gold label
-task_id      str   e.g. "retrieval"
+task_id      str   e.g. "TimeSeriesExam"
 options      list  Valid option letters for this sample
 ```
 
-The `input_mode` field in each model's `get_args_dict()` tells the eval loop how to deliver TS:
+**Text-only models** (`InstructModel`, `LargeInstructModel`, `TimeOmniHFWrapper`, `APIModelWrapper`, `RandomBaseline`):
+call `fill_ts_placeholders(input_text, input_ts)` from `utils/ts_serialize.py` at the top of `generate()` to substitute numeric arrays before inference.
 
-**`input_mode = "combined"`** (`InstructModel`, `LargeInstructModel`, `TimeOmniHFWrapper`, `APIModelWrapper`, text baselines):
-`input_text` already contains TS as numeric arrays; `input_ts` is ignored.
-
-**`input_mode = "separate"`** (`ImageInstructModel`, `QwenVLImageModel`, `ChatTSHFWrapper`, `ChatTSVLLMWrapper`, `DinoKNNCLSABaseline`):
-`input_text` contains `<ts><ts/>` placeholders; raw arrays are in `input_ts`.
-- Image models replace each placeholder with a matplotlib plot.
-- ChatTS models pass `input_ts` arrays to the patch-embedding processor.
-- `DinoKNNCLSABaseline` reads `input_ts` directly (ignores `input_text` for TS).
-
-`KNNBaseline` declares `input_mode = "combined"` but also reads `input_ts` for DTW distance — both fields must be valid.
+**Multimodal models** (`ImageInstructModel`, `QwenVLImageModel`, `ChatTSHFWrapper`, `ChatTSVLLMWrapper`):
+consume placeholders natively — image models render each array as a matplotlib plot; ChatTS models pass arrays to their patch-embedding processor.
 
 ---
 

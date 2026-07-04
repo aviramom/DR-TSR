@@ -8,6 +8,7 @@ import transformers
 import torch
 from datasets import Dataset
 from models.base_model import BaseModelWrapper
+from utils.ts_serialize import fill_ts_placeholders
 
 
 class InstructModel(BaseModelWrapper):
@@ -40,7 +41,6 @@ class InstructModel(BaseModelWrapper):
             "max_seq_length": 32768,
             "max_new_tokens": 10,
             "format": "chat",
-            "input_mode": "combined",
         }
 
 
@@ -115,7 +115,9 @@ class InstructModel(BaseModelWrapper):
         Returns:
             List[str]: Decoded strings per input. If pred_only is True, only the continuation.
         """
-        batch = batch["input_text"]
+        input_texts = batch["input_text"]
+        input_ts_list = batch.get("input_ts", [[] for _ in input_texts])
+        batch = [fill_ts_placeholders(t, ts) for t, ts in zip(input_texts, input_ts_list)]
 
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -260,7 +262,9 @@ class LargeInstructModel(InstructModel):
 
         from vllm import SamplingParams
 
-        prompts_raw = batch["input_text"]
+        input_texts = batch["input_text"]
+        input_ts_list = batch.get("input_ts", [[] for _ in input_texts])
+        prompts_raw = [fill_ts_placeholders(t, ts) for t, ts in zip(input_texts, input_ts_list)]
 
         def _apply_template(q):
             try:

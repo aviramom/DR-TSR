@@ -11,41 +11,26 @@ def _letter(idx: int) -> str:
     return _OPTION_LETTERS[idx]
 
 
-def _serialize_ts(ts: List[float], precision: int) -> str:
-    return "[" + ", ".join(f"{v:.{precision}f}" for v in ts) + "]"
-
-
 def _build_prompt(
     question: str,
     options: List[str],
     ts: Optional[List[float]],
     ts1: Optional[List[float]],
     ts2: Optional[List[float]],
-    input_mode: str,
-    ts_precision: int,
 ) -> str:
     """Construct the full prompt for a single TSE item.
 
-    For single-series questions, one TS block appears before the question.
-    For two-series questions (ts1/ts2), two TS blocks appear.
-    In combined mode the series are serialized as numeric text; in separate
-    mode each series is replaced by a '<ts><ts/>' placeholder that
-    image/multimodal models replace at inference time.
+    TS values are always represented as '<ts><ts/>' placeholders. Models
+    that consume numeric text call fill_ts_placeholders() in their generate()
+    to substitute the raw arrays before inference.
     """
     lines: List[str] = []
 
     if ts is not None:
-        if input_mode == "combined":
-            lines.append(f"Time Series: {_serialize_ts(ts, ts_precision)}")
-        else:
-            lines.append(f"Time Series: {_TS_PLACEHOLDER}")
+        lines.append(f"Time Series: {_TS_PLACEHOLDER}")
     elif ts1 is not None:
-        if input_mode == "combined":
-            lines.append(f"Time Series 1: {_serialize_ts(ts1, ts_precision)}")
-            lines.append(f"Time Series 2: {_serialize_ts(ts2, ts_precision)}")
-        else:
-            lines.append(f"Time Series 1: {_TS_PLACEHOLDER}")
-            lines.append(f"Time Series 2: {_TS_PLACEHOLDER}")
+        lines.append(f"Time Series 1: {_TS_PLACEHOLDER}")
+        lines.append(f"Time Series 2: {_TS_PLACEHOLDER}")
 
     lines.append("")
     lines.append(f"Question: {question}")
@@ -93,10 +78,8 @@ class TimeSeriesExamDataset:
         difficulty  str        'easy' / 'medium' / 'hard'.
 
     Args:
-        data_path:    Path to qa_dataset.json.
-        input_mode:   'combined' or 'separate'.
-        ts_precision: Decimal places for TS serialization (combined mode only).
-        num_samples:  Cap on total samples loaded (None = all).
+        data_path:   Path to qa_dataset.json.
+        num_samples: Cap on total samples loaded (None = all).
     """
 
     TASK_ID = "TimeSeriesExam"
@@ -104,17 +87,9 @@ class TimeSeriesExamDataset:
     def __init__(
         self,
         data_path: str = "qa_dataset.json",
-        input_mode: str = "combined",
-        ts_precision: int = 4,
         num_samples: Optional[int] = None,
         category: Optional[str] = None,
     ):
-        if input_mode not in ("combined", "separate"):
-            raise ValueError(
-                f"input_mode must be 'combined' or 'separate', got {input_mode!r}"
-            )
-        self.input_mode = input_mode
-        self.ts_precision = ts_precision
         self.data_path = data_path
 
         with open(data_path) as f:
@@ -145,8 +120,6 @@ class TimeSeriesExamDataset:
             ts=ts,
             ts1=ts1,
             ts2=ts2,
-            input_mode=self.input_mode,
-            ts_precision=self.ts_precision,
         )
 
         # input_ts: list of raw float arrays in the same order as the

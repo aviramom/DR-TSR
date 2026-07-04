@@ -82,7 +82,6 @@ class ChatTSHFWrapper(BaseModelWrapper):
             "max_seq_length": 4096,
             "max_new_tokens": 50,
             "chatts_system_prompt": "You are a helpful assistant.",
-            "input_mode": "separate",
             "ts_place_holder": "<ts><ts/>"
         }
 

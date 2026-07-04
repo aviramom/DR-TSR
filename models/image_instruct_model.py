@@ -90,7 +90,6 @@ class ImageInstructModel(BaseModelWrapper):
             "max_seq_length": 4096,
             "max_new_tokens": 50,
             "format": "chat",
-            "input_mode": "separate",
         }
 
     def load_model(self, model_path: Optional[str] = None, cache_dir: Optional[str] = None):
