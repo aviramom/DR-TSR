@@ -16,7 +16,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--use_wandb", type=int, default=0)
     parser.add_argument("--override_run", type=int, default=1)
     parser.add_argument("--keys_to_match", type=list,
-                        default=["exp_id", "random_seed", "task_id", "method", "prompt_format"])
+                        default=["exp_id", "random_seed", "task_id", "method", "retriever", "num_shots"])
 
     # Model
     parser.add_argument("--method", type=str, default="bytedance-research/ChatTS-8B")
@@ -25,6 +25,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--quantization", type=str, choices=["none", "4bit", "8bit"],
                         default="none")
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--retriever_device", type=str, default="cpu",
+                        help="Device for retriever encoder models (MOMENT, DINOv2). "
+                             "Defaults to cpu so the LLM has full VRAM headroom.")
     parser.add_argument("--low_cpu_mem_usage", action="store_true", default=True)
 
     # Data
@@ -40,8 +43,14 @@ def get_parser() -> argparse.ArgumentParser:
                         help="Task to evaluate. Data path is resolved from configs/data_paths.yaml.")
 
     # ICL / few-shot
-   
     parser.add_argument("--num_shots", type=int, default=1)
+    parser.add_argument(
+        "--retriever",
+        type=str,
+        default="none",
+        choices=["none", "random", "text", "ts", "vision_ts"],
+        help="Demonstration retriever for k-shot ICL. 'none' = zero-shot.",
+    )
 
 
     # Inference

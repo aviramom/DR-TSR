@@ -84,20 +84,41 @@ def _save_results(args, artifacts: Dict[str, Any]) -> None:
     results_dir = Path(args.results_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    slug = re.sub(r"[^a-zA-Z0-9_\-]", "_", f"{args.exp_id}__{args.method}__{args.task_id}__seed{args.random_seed}")
+    retriever_tag = getattr(args, "retriever", "none")
+    slug = re.sub(
+        r"[^a-zA-Z0-9_\-]", "_",
+        f"{args.exp_id}__{args.method}__{args.task_id}"
+        f"__seed{args.random_seed}__{retriever_tag}__{args.num_shots}shot",
+    )
     out_path = results_dir / f"{slug}.json"
+
+    # Run-level metadata written into every row so the file is self-contained
+    # (no need to cross-reference filenames or W&B configs during analysis).
+    run_meta = {
+        "exp_id":     args.exp_id,
+        "method":     args.method,
+        "task_id":    args.task_id,
+        "seed":       args.random_seed,
+        "retriever":  retriever_tag,
+        "num_shots":  args.num_shots,
+    }
 
     rows = [
         {
-            "id":               artifacts["item_ids"][i],
-            "category":         artifacts["categories"][i],
-            "subcategory":      artifacts["subcategories"][i],
-            "difficulty":       artifacts["difficulties"][i],
-            "question":         artifacts["questions"][i],
-            "gold_answer":      artifacts["gold_answers"][i],
-            "predicted_answer": artifacts["predicted_answers"][i],
-            "generated_text":   artifacts["generated_texts"][i],
-            "correct":          bool(artifacts["correct"][i]),
+            **run_meta,
+            "id":                  artifacts["item_ids"][i],
+            "tid":                 artifacts["tids"][i],
+            "category":            artifacts["categories"][i],
+            "subcategory":         artifacts["subcategories"][i],
+            "difficulty":          artifacts["difficulties"][i],
+            "question":            artifacts["questions"][i],
+            "gold_answer":         artifacts["gold_answers"][i],
+            "predicted_answer":    artifacts["predicted_answers"][i],
+            "generated_text":      artifacts["generated_texts"][i],
+            "correct":             bool(artifacts["correct"][i]),
+            "input_prompt":        artifacts["input_prompts"][i],
+            "retrieved_demo_ids":  artifacts["retrieved_demo_ids"][i],
+            "retrieved_demo_tids": artifacts["retrieved_demo_tids"][i],
         }
         for i in range(len(artifacts["item_ids"]))
     ]
@@ -172,10 +193,24 @@ def main():
     dataset = _build_dataset(args, data_paths=data_paths)
     print(f"[run_exp] dataset={args.task_id}  n={len(dataset)}")
 
-    # 7. Retriever — not implemented yet
-    retriever = None
+    # 7. Retriever — leave-one-out: index full dataset, exclusion per query
+    from utils.retriever import retriever_dict
 
-    # 8. Evaluate
+    if args.retriever == "none" or args.num_shots == 0:
+        retriever = None
+    else:
+        retriever_cls = retriever_dict.get(args.retriever)
+        if retriever_cls is None:
+            raise ImportError(
+                f"Retriever '{args.retriever}' is unavailable — check that its "
+                "dependencies are installed (see requirements.txt)."
+            )
+        print(f"[run_exp] retriever={args.retriever}  indexing {len(dataset)} items...")
+        retriever_kwargs = {"device": args.retriever_device} if args.retriever in ("ts", "vision_ts") else {}
+        retriever = retriever_cls(**retriever_kwargs)
+        retriever.index(list(dataset))
+
+    # 8. Evaluate (full dataset — retriever excludes query item internally)
     eval_fn = _get_eval_fn(args.task_id)
     metrics, artifacts = eval_fn(
         model=model,

@@ -61,6 +61,11 @@ class InstructModel(BaseModelWrapper):
             cache_dir=cache,
             torch_dtype=torch.bfloat16,
         )
+        try:
+            import flash_attn  # noqa: F401
+            hf_kwargs["attn_implementation"] = "flash_attention_2"
+        except ImportError:
+            print("[InstructModel] flash_attn not installed, using default attention")
         if quantization == "8bit":
             hf_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
             hf_kwargs.pop("torch_dtype")  # incompatible with bitsandbytes quantization
@@ -198,16 +203,35 @@ class LargeInstructModel(InstructModel):
         if path is None:
             raise ValueError("No model_path provided for LargeInstructModel.load_model")
 
+        # "-vllm" is a routing suffix (selects this vLLM wrapper), not part of the
+        # checkpoint name — strip it to get the real HF repo id.
+        if path.endswith("-vllm"):
+            path = path[: -len("-vllm")]
+
         try:
             from vllm import LLM, SamplingParams
+            from transformers import AutoConfig
             n_gpus = torch.cuda.device_count() or 1
             print(f"[LargeInstructModel] Loading via vLLM (tensor_parallel_size={n_gpus})")
+
+            # vLLM refuses to start if max_model_len exceeds the checkpoint's trained
+            # context window (max_position_embeddings) — going past it yields NaNs from
+            # RoPE. Clamp our requested length to the model's real limit instead of
+            # crashing (Qwen3-8B tops out at 40960, not the 50000 default).
+            hf_cfg = AutoConfig.from_pretrained(
+                path, trust_remote_code=True, cache_dir=cache,
+            )
+            model_ctx = getattr(hf_cfg, "max_position_embeddings", None) or 40960
+            max_model_len = min(max(self.args.max_seq_length, 16384), model_ctx)
+            print(f"[LargeInstructModel] max_model_len={max_model_len} "
+                  f"(requested {self.args.max_seq_length}, model ctx {model_ctx})")
+
             self._vllm_llm = LLM(
                 model=path,
                 download_dir=cache,
                 tensor_parallel_size=n_gpus,
                 dtype="bfloat16",
-                max_model_len=max(self.args.max_seq_length, 16384),
+                max_model_len=max_model_len,
                 trust_remote_code=True,
                 enforce_eager=True,  # skip CUDA graph compilation (30-60 min for 27B)
                 disable_custom_all_reduce=True,  # required when GPUs lack direct P2P (non-adjacent PCIe)

@@ -10,7 +10,7 @@ in `utils/model.py:method_wrapper_dict` under one or more `--method` IDs.
 | File | Class | Method IDs | Backend | Batch fields used |
 |------|-------|-----------|---------|-------------------|
 | `instruct_model.py` | `InstructModel` | `Qwen/Qwen3-4B-Instruct-2507`, Llama/Mistral variants | HF pipeline | `input_text` |
-| `instruct_model.py` | `LargeInstructModel` | `Qwen/Qwen3.6-27B`, `-FP8` | vLLM (falls back to HF) | `input_text` |
+| `instruct_model.py` | `LargeInstructModel` | `Qwen/Qwen3.6-27B`, `-FP8`, `Qwen/Qwen3-8B-vllm` | vLLM (falls back to HF) | `input_text` |
 | `image_instruct_model.py` | `ImageInstructModel` | `Qwen/Qwen3.6-27B-image-ts` | vLLM multimodal | `input_text`, `input_ts` |
 | `qwen_vl_image_model.py` | `QwenVLImageModel` | `Qwen/Qwen3-VL-8B-Instruct` | HF Vision2Seq | `input_text`, `input_ts` |
 | `chatts_model.py` | `ChatTSHFWrapper` | `bytedance-research/ChatTS-8B`, `-14B` | HF | `input_text`, `input_ts` |
@@ -49,7 +49,7 @@ consume placeholders natively — image models render each array as a matplotlib
 
 ## Special Behaviours
 
-- **`LargeInstructModel`**: prefers vLLM, falls back to HF `device_map="auto"` if vLLM is absent.
+- **`LargeInstructModel`**: prefers vLLM, falls back to HF `device_map="auto"` if vLLM is absent. Strips a `-vllm` routing suffix from the method id to get the real checkpoint, so `Qwen/Qwen3-8B-vllm` serves the same `Qwen/Qwen3-8B` weights through vLLM (bf16, paged KV) on a single 4090 — used to dodge the HF-pipeline OOM on long k-shot prompts. Requires the `multits_large` env, which now also has `sentence_transformers` + `momentfm` for the text/ts retrievers.
 - **`ImageInstructModel`**: strips `-image-ts` suffix from method ID to get the real checkpoint path.
 - **`ChatTSVLLMWrapper`**: sets `VLLM_USE_V1=0` to avoid a weight-tying check in vLLM V1.
 - **`EmptyAllTSBaseline`**: needs `--quantization 8bit` to fit Qwen3-4B on a single RTX 4090.

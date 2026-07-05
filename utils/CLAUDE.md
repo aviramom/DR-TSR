@@ -29,7 +29,8 @@ args   = create_parser()       # parses sys.argv and post-processes defaults
 | `--project` | `aviramom-/DR-TSR` | W&B project (`entity/project`) |
 | `--use_wandb` | `0` | Enable W&B logging |
 | `--override_run` | `1` | Re-run even if a matching finished W&B run exists |
-| `--device` | `cuda` | PyTorch device |
+| `--device` | `cuda` | PyTorch device for the LLM |
+| `--retriever_device` | `cpu` | Device for retriever encoder models (MOMENT, DINOv2). Kept separate from `--device` so the LLM has full VRAM headroom. |
 | `--quantization` | `none` | `4bit` / `8bit` / `none` |
 | `--cache_dir` | `""` → `None` | HuggingFace model cache directory |
 

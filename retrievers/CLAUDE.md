@@ -21,7 +21,8 @@ etc.) the retriever needs. Called once per experiment run before evaluation star
 
 **`retrieve(query, k)`**  
 Return up to `k` items from the indexed pool, ranked best-first. Must never return
-the query item itself (match on `item["id"]` if available).
+the query item itself (match on `item["id"]` if available), and must never return
+items from the same question template (match on `item["tid"]` if available).
 
 ---
 
@@ -58,6 +59,42 @@ retriever = SomeRetriever(...)
 retriever.index(pool_items)          # build index once
 # run_exp.py then passes retriever → evaluate_tse → retrieve per query
 ```
+
+---
+
+## Template exclusion and diversity
+
+TimeSeriesExam questions are generated from a fixed set of templates (`tid` field).
+Two invariants are enforced by all retrievers:
+
+1. **Same-template exclusion** — no demonstration may share `tid` with the query.
+   Same-template items have near-identical question text, so a text retriever would
+   otherwise retrieve k copies of the same question type, teaching the model nothing
+   new about the query.
+
+2. **Greedy template diversity** — among the k returned demonstrations, each has a
+   distinct `tid`. After ranking by relevance, candidates are selected greedily:
+   the first unseen template wins, duplicates are skipped.
+
+Both invariants are implemented in `BaseRetriever._cosine_top_k` (via the
+`exclude_tid` parameter) and in `RandomRetriever.retrieve()`.  If `tid` is absent
+from the item dicts (e.g. a different dataset), the code degrades gracefully to the
+original behaviour.
+
+---
+
+## Retrievers
+
+| Class | File | Signal | Notes |
+|-------|------|--------|-------|
+| `RandomRetriever` | `random_retriever.py` | none | Random baseline |
+| `TextRetriever` | `text_retriever.py` | question text | SentenceTransformer cosine kNN |
+| `TSRetriever` | `ts_retriever.py` | time series shape | MOMENT embedding cosine kNN |
+| `VisionTSRetriever` | `vision_ts_retriever.py` | TS rendered as image | CLIP embedding cosine kNN |
+| `RRFRetriever` | `rrf_retriever.py` | TS + text (fused) | Reciprocal Rank Fusion of two sub-retrievers |
+
+See [RRF.md](RRF.md) for a detailed explanation of RRF — what the formula means,
+why `k=60`, and how it compares to weighted cosine similarity.
 
 ---
 

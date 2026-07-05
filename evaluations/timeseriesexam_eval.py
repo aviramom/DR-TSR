@@ -186,15 +186,22 @@ def evaluate_tse(
     all_items: List[Dict[str, Any]] = list(dataset)
 
     # ---- Retriever augmentation (k-shot) -----------------------------------
+    retrieved_demo_ids:  List[List] = []
+    retrieved_demo_tids: List[List] = []
+
     if retriever is not None and num_shots > 0:
         augmented: List[Dict[str, Any]] = []
         for item in tqdm(all_items, desc="Retrieving demonstrations"):
             demo_items = retriever.retrieve(item, k=num_shots)
+            retrieved_demo_ids.append([d.get("id") for d in demo_items])
+            retrieved_demo_tids.append([d.get("tid") for d in demo_items])
             aug_text, aug_ts = build_icl_prompt(item, demo_items)
             augmented.append({**item, "input_text": aug_text, "input_ts": aug_ts})
         all_items = augmented
         effective_shots = num_shots
     else:
+        retrieved_demo_ids  = [[] for _ in all_items]
+        retrieved_demo_tids = [[] for _ in all_items]
         effective_shots = 0
 
     # ---- Inference loop -----------------------------------------------------
@@ -204,6 +211,7 @@ def evaluate_tse(
     categories: List[str] = []
     subcategories: List[str] = []
     difficulties: List[str] = []
+    tids: List = []
     item_ids: List[int] = []
     input_prompts: List[str] = []
     input_ts_list: List[List[List[float]]] = []
@@ -224,6 +232,7 @@ def evaluate_tse(
             categories.append(item["category"])
             subcategories.append(item["subcategory"])
             difficulties.append(item["difficulty"])
+            tids.append(item.get("tid"))
             item_ids.append(item["id"])
             input_prompts.append(item["input_text"])
             input_ts_list.append(item["input_ts"])
@@ -240,9 +249,15 @@ def evaluate_tse(
         "total_samples": n,
         "num_shots": effective_shots,
         # Per-group breakdowns (nested dicts — logger can flatten as needed)
-        "accuracy_by_category": _group_accuracy(gold_answers, predicted_answers, categories),
+        "accuracy_by_category":    _group_accuracy(gold_answers, predicted_answers, categories),
         "accuracy_by_subcategory": _group_accuracy(gold_answers, predicted_answers, subcategories),
-        "accuracy_by_difficulty": _group_accuracy(gold_answers, predicted_answers, difficulties),
+        "accuracy_by_difficulty":  _group_accuracy(gold_answers, predicted_answers, difficulties),
+        # Per-template breakdown (tid 1–104) — useful for identifying which question
+        # types benefit most from retrieval
+        "accuracy_by_tid": _group_accuracy(
+            gold_answers, predicted_answers,
+            [str(t) for t in tids],
+        ),
     }
 
     if _SKLEARN:
@@ -256,17 +271,21 @@ def evaluate_tse(
 
     # ---- Artifacts ----------------------------------------------------------
     artifacts: Dict[str, Any] = {
-        "item_ids": item_ids,
-        "questions": questions,
-        "input_prompts": input_prompts,
-        "generated_texts": generated_texts,
-        "predicted_answers": predicted_answers,
-        "gold_answers": gold_answers,
-        "correct": correct,
-        "categories": categories,
-        "subcategories": subcategories,
-        "difficulties": difficulties,
-        "input_ts": input_ts_list,
+        "item_ids":           item_ids,
+        "tids":               tids,
+        "questions":          questions,
+        "input_prompts":      input_prompts,
+        "generated_texts":    generated_texts,
+        "predicted_answers":  predicted_answers,
+        "gold_answers":       gold_answers,
+        "correct":            correct,
+        "categories":         categories,
+        "subcategories":      subcategories,
+        "difficulties":       difficulties,
+        "input_ts":           input_ts_list,
+        # Retrieval provenance — empty lists for 0-shot runs
+        "retrieved_demo_ids":  retrieved_demo_ids,
+        "retrieved_demo_tids": retrieved_demo_tids,
     }
 
     return metrics, artifacts

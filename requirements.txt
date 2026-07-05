@@ -22,6 +22,11 @@ pillow>=12.0
 
 # Time series
 tslearn>=0.8
+# momentfm — install via: pip install git+https://github.com/moment-timeseries-foundation-model/moment.git
+# (PyPI package name is momentfm; momentresearch is a fallback alias if ever published)
+
+# Visualization (used by VisionTSRetriever to render TS line plots)
+matplotlib>=3.9
 
 # ML metrics (optional — eval falls back gracefully if missing)
 scikit-learn>=1.7

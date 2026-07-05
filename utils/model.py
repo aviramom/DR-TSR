@@ -42,6 +42,12 @@ method_wrapper_dict: Dict[str, BaseModelWrapper] = {
     "Qwen/Qwen3.6-27B": LargeInstructModel,
     "Qwen/Qwen3.6-27B-FP8": LargeInstructModel,
 
+    # --- Text LLM via vLLM on a single 4090 (multits_large env) ---
+    # Same weights as "Qwen/Qwen3-8B" (InstructModel/HF) but served through vLLM's
+    # paged KV cache so long ICL prompts fit in bf16 without OOM. Strip the "-vllm"
+    # suffix to the real checkpoint below.
+    "Qwen/Qwen3-8B-vllm": LargeInstructModel,
+
     # --- Vision LLMs (input_mode="separate": receive <ts><ts/> placeholders) ---
     "Qwen/Qwen3.6-27B-image-ts": ImageInstructModel,   # TS → matplotlib plot, vLLM
     "Qwen/Qwen3-VL-8B-Instruct": QwenVLImageModel,     # TS → matplotlib plot, HF

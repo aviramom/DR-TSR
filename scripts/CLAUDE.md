@@ -15,13 +15,14 @@ through unchanged.
 | `run_single_gpu_vllm.sh` | GPU | 1× RTX 4090 | `multits_large` | 1 h | vLLM models on a single 4090 |
 | `run_single_gpu_large.sh` | GPU | 2× RTX 6000 | `multits_large` | 2 h | 27B+ models (tensor parallel) |
 | `submit_tse_exp.sh` | orchestrator | — | — | — | Sweeps all models × seeds × shots |
+| `submit_tse_qwen3_text.sh` | orchestrator | — | — | — | Qwen3-8B only, via vLLM (`-vllm` method, `run_single_gpu_vllm.sh`) — 36 k-shot jobs |
 
 ---
 
 ## Conda Environments
 
 - **`multits`** — standard env for HF-based models and baselines.
-- **`multits_large`** — newer transformers + CUDA 12.4 + vLLM 0.19.1; required for Qwen3.6-27B and vLLM runners.
+- **`multits_large`** — newer transformers (5.8) + torch 2.10/cu128 + vLLM 0.19.1; required for Qwen3.6-27B and vLLM runners. Also has `sentence_transformers` + `momentfm` installed so the text/ts retrievers run here too (vLLM ships FlashAttention 2 as its attention backend — no separate flash-attn build needed).
 
 > **Note**: `ChatTSVLLMWrapper` is broken on vLLM 0.19.1 (multits_large removed `VLLM_USE_V1`).
 > Use `bytedance-research/ChatTS-8B` (`ChatTSHFWrapper`) with `run_single_gpu.sh` instead.
@@ -59,10 +60,16 @@ Edit these variables at the top of the file to control the sweep:
 | Variable | Description |
 |----------|-------------|
 | `exp_id` | W&B experiment group label |
-| `seeds` | Array of random seeds |
-| `shots` | Array of k-shot values |
+| `seeds` | Array of random seeds (default: 2021 0 1 — 3 seeds for variance) |
+| `shots_kshot` | k values for k-shot runs (0-shot is always submitted separately) |
+| `retrievers` | Retriever IDs to sweep (`random text vision_ts ts`) |
+| `gpu_models` | LLMs to run on GPU |
 | `num_samples` | Cap dataset size for smoke tests (empty = full eval) |
 | `batch_size` | Samples per `model.generate()` call |
 | `cache_dir` | HuggingFace model cache directory |
 
-Model routing is hardcoded in the script: `random_baseline` → CPU; everything else → `run_single_gpu.sh`.
+**Job structure**: 0-shot jobs never pass `--retriever` (defaults to `none`). k-shot jobs
+(shots 1, 2, 3) sweep all four retrievers. Random baseline → CPU; LLMs → GPU with
+`--device cuda --retriever_device cpu` so the LLM has full VRAM headroom.
+
+**Default sweep**: 156 jobs — 12 zero-shot + 144 k-shot (4 models × 4 retrievers × 3 shots × 3 seeds).

@@ -1,6 +1,6 @@
-from retrievers.base_retriever import BaseRetriever
+"""Registry mapping --retriever names to retriever classes."""
+
 from retrievers.random_retriever import RandomRetriever
-from retrievers.rrf_retriever import RRFRetriever
 from retrievers.text_retriever import TextRetriever
 
 try:
@@ -13,11 +13,9 @@ try:
 except ImportError:
     VisionTSRetriever = None  # type: ignore[assignment,misc]
 
-__all__ = [
-    "BaseRetriever",
-    "RandomRetriever",
-    "RRFRetriever",
-    "TextRetriever",
-    "TSRetriever",
-    "VisionTSRetriever",
-]
+retriever_dict = {
+    "random":    RandomRetriever,
+    "text":      TextRetriever,
+    "ts":        TSRetriever,
+    "vision_ts": VisionTSRetriever,
+}

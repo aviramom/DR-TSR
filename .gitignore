@@ -22,8 +22,8 @@ venv/
 wandb/
 
 # Results (kept locally, not committed)
-retrieval_results/*.json
-!retrieval_results/*smoke*.json
+results/*.json
+!results/*smoke*.json
 outputs/
 
 # Model / data caches
