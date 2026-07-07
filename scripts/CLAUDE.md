@@ -16,6 +16,10 @@ through unchanged.
 | `run_single_gpu_large.sh` | GPU | 2× RTX 6000 | `multits_large` | 2 h | 27B+ models (tensor parallel) |
 | `submit_tse_exp.sh` | orchestrator | — | — | — | Sweeps all models × seeds × shots |
 | `submit_tse_qwen3_text.sh` | orchestrator | — | — | — | Qwen3-8B only, via vLLM (`-vllm` method, `run_single_gpu_vllm.sh`) — 36 k-shot jobs |
+| `submit_tse_rrf_dino.sh` | orchestrator | — | — | — | Backfills the `rrf` and `delay_dino` retrievers (added after the initial sweep) across all 3 non-baseline models — 90 k-shot jobs |
+| `submit_tse_rrf_combos.sh` | orchestrator | — | — | — | Sweeps all RRF pair combos + the 3-way shape fusion (`rrf-<a>-<b>[-<c>]` specs; ts+text skipped — already logged as `rrf`) across all 3 non-baseline models — 270 k-shot jobs |
+| `submit_tse_mrrf_full.sh` | orchestrator | — | — | — | Full 6-way MR-RRF fusion only (`rrf-text-ts-vision_ts-spectral-stats-vision_wavelet`, see `MRRF_METHOD.md`) across all 3 non-baseline models × shots {1,2,3,5,8} × 3 seeds — 45 k-shot jobs. Run this before the MR-RRF ablation grid |
+| `submit_tse_textbge_mrrf.sh` | orchestrator | — | — | — | Two retrievers: `text_bge` (BGE-large single text) + the full 6-way MR-RRF spec, across all 3 non-baseline models — 90 k-shot jobs. The MR-RRF half duplicates `submit_tse_mrrf_full.sh`; drop it from the array if that already ran |
 
 ---
 
@@ -23,6 +27,8 @@ through unchanged.
 
 - **`multits`** — standard env for HF-based models and baselines.
 - **`multits_large`** — newer transformers (5.8) + torch 2.10/cu128 + vLLM 0.19.1; required for Qwen3.6-27B and vLLM runners. Also has `sentence_transformers` + `momentfm` installed so the text/ts retrievers run here too (vLLM ships FlashAttention 2 as its attention backend — no separate flash-attn build needed).
+
+Both envs have `PyWavelets` installed (needed by the `vision_wavelet` retriever's CWT scalograms).
 
 > **Note**: `ChatTSVLLMWrapper` is broken on vLLM 0.19.1 (multits_large removed `VLLM_USE_V1`).
 > Use `bytedance-research/ChatTS-8B` (`ChatTSHFWrapper`) with `run_single_gpu.sh` instead.
@@ -70,6 +76,8 @@ Edit these variables at the top of the file to control the sweep:
 
 **Job structure**: 0-shot jobs never pass `--retriever` (defaults to `none`). k-shot jobs
 (shots 1, 2, 3) sweep all four retrievers. Random baseline → CPU; LLMs → GPU with
-`--device cuda --retriever_device cpu` so the LLM has full VRAM headroom.
+`--device cuda --retriever_device cuda` — retriever encoders index the pool on the GPU
+*before* the LLM loads, then offload to CPU (leave-one-out queries reuse indexed
+embeddings, so no encoder is needed during evaluation).
 
 **Default sweep**: 156 jobs — 12 zero-shot + 144 k-shot (4 models × 4 retrievers × 3 shots × 3 seeds).

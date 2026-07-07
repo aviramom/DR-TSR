@@ -185,30 +185,26 @@ def main():
     print(f"\n[run_exp] method={args.method}  task={args.task_id}  shots={args.num_shots}")
     print(f"[run_exp] batch_size={args.batch_size}  num_samples={args.num_samples}")
 
-    # 5. Model
-    model = model_cls(args, device=args.device)
-    model.load_model()
-
-    # 6. Dataset
+    # 5. Dataset
     dataset = _build_dataset(args, data_paths=data_paths)
     print(f"[run_exp] dataset={args.task_id}  n={len(dataset)}")
 
-    # 7. Retriever — leave-one-out: index full dataset, exclusion per query
-    from utils.retriever import retriever_dict
+    # 6. Retriever — leave-one-out: index full dataset, exclusion per query.
+    #    Indexed BEFORE the LLM loads so encoders can use the GPU (vLLM
+    #    preallocates most of VRAM at load time); encoders offload themselves
+    #    to CPU at the end of index().
+    from utils.retriever import build_retriever
 
     if args.retriever == "none" or args.num_shots == 0:
         retriever = None
     else:
-        retriever_cls = retriever_dict.get(args.retriever)
-        if retriever_cls is None:
-            raise ImportError(
-                f"Retriever '{args.retriever}' is unavailable — check that its "
-                "dependencies are installed (see requirements.txt)."
-            )
         print(f"[run_exp] retriever={args.retriever}  indexing {len(dataset)} items...")
-        retriever_kwargs = {"device": args.retriever_device} if args.retriever in ("ts", "vision_ts") else {}
-        retriever = retriever_cls(**retriever_kwargs)
+        retriever = build_retriever(args.retriever, device=args.retriever_device)
         retriever.index(list(dataset))
+
+    # 7. Model
+    model = model_cls(args, device=args.device)
+    model.load_model()
 
     # 8. Evaluate (full dataset — retriever excludes query item internally)
     eval_fn = _get_eval_fn(args.task_id)

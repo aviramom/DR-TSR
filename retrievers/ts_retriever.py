@@ -34,6 +34,7 @@ class TSRetriever(BaseRetriever):
         self._model = None
         self._pool_items: List[Dict[str, Any]] = []
         self._pool_vecs: np.ndarray = np.empty((0,))
+        self._id_to_row: Dict[Any, int] = {}
 
     def _load_model(self):
         try:
@@ -89,11 +90,17 @@ class TSRetriever(BaseRetriever):
         norms = np.linalg.norm(raw, axis=1, keepdims=True)
         norms = np.where(norms < 1e-8, 1.0, norms)
         self._pool_vecs = (raw / norms).astype(np.float32)
+        self._id_to_row = self._build_id_map(self._pool_items)
+        self._offload_encoder()
         print(f"[TSRetriever] indexed {len(self._pool_items)} items  shape={self._pool_vecs.shape}")
 
     def retrieve(self, query: Dict[str, Any], k: int) -> List[Dict[str, Any]]:
-        with torch.no_grad():
-            q_vec = self._embed_item(query["input_ts"])
-        norm = np.linalg.norm(q_vec)
-        q_vec = (q_vec / norm if norm > 1e-8 else q_vec).astype(np.float32)
+        row = self._id_to_row.get(query.get("id"))
+        if row is not None:
+            q_vec = self._pool_vecs[row]
+        else:
+            with torch.no_grad():
+                q_vec = self._embed_item(query["input_ts"])
+            norm = np.linalg.norm(q_vec)
+            q_vec = (q_vec / norm if norm > 1e-8 else q_vec).astype(np.float32)
         return self._cosine_top_k(q_vec, self._pool_vecs, self._pool_items, k, query.get("id"), query.get("tid"))

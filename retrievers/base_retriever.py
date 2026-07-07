@@ -41,6 +41,38 @@ class BaseRetriever(ABC):
         """
 
     @staticmethod
+    def _build_id_map(pool_items: List[Dict[str, Any]]) -> Dict[Any, int]:
+        """Map item["id"] → row index in the pool embedding matrix.
+
+        Leave-one-out evaluation indexes the full dataset, so a query's
+        embedding usually already exists in the pool matrix. retrieve() can
+        look it up by id instead of re-encoding — saving a forward pass per
+        query and keeping query/pool vectors numerically identical.
+        """
+        return {
+            item["id"]: i
+            for i, item in enumerate(pool_items)
+            if item.get("id") is not None
+        }
+
+    def _offload_encoder(self) -> None:
+        """Move the encoder (self._model) to CPU and free its GPU memory.
+
+        Called at the end of index(): with id-based query lookup the encoder
+        is only needed for queries absent from the pool, so it does not have
+        to stay on the GPU competing with the LLM for VRAM. Relies on the
+        subclass conventions self._model / self._device.
+        """
+        if getattr(self, "_model", None) is None or self._device == "cpu":
+            return
+        import torch
+
+        self._model.to("cpu")
+        self._device = "cpu"
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    @staticmethod
     def _cosine_top_k(
         query_vec: np.ndarray,
         pool_vecs: np.ndarray,

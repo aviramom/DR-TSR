@@ -15,19 +15,20 @@ It was introduced in:
 
 ## The formula
 
-Given two ranked lists A and B over the same set of candidates:
+Given N ranked lists over the same set of candidates:
 
 ```
-RRF_score(d) = 1 / (k + rank_A(d)) + 1 / (k + rank_B(d))
+RRF_score(d) = sum_i 1 / (k + rank_i(d))
 ```
 
-- `rank_A(d)` is the position of candidate `d` in list A (1-indexed)
-- `rank_B(d)` is its position in list B (0 if absent — it contributes nothing)
+- `rank_i(d)` is the position of candidate `d` in list `i` (1-indexed; contributes
+  nothing if `d` is absent from that list)
 - `k = 60` is a smoothing constant (the value from the original paper)
 
 Items present in only one list receive a partial score from that list only.
-Items present in both lists accumulate contributions from both — so consistent
-agreement between retrievers boosts a candidate above what either alone would rank it.
+Items present in more lists accumulate more contributions — so consistent
+agreement between retrievers boosts a candidate above what any one alone would rank it.
+The classic two-retriever case is just N=2.
 
 ---
 
@@ -75,11 +76,10 @@ of what the underlying model scores look like.
 ## How `RRFRetriever` works in this codebase
 
 ```python
-from retrievers import RRFRetriever, TSRetriever, TextRetriever
+from retrievers import RRFRetriever, TSRetriever, TextRetriever, VisionTSRetriever, DelayDINORetriever
 
 retriever = RRFRetriever(
-    retriever_a=TSRetriever(device="cpu"),
-    retriever_b=TextRetriever(),
+    retrievers=[TSRetriever(device="cpu"), DelayDINORetriever(device="cpu")],
     k_rrf=60,          # smoothing constant
     n_candidates=None, # None = use full pool (most correct); set e.g. 4*k for speed
 )
@@ -87,9 +87,12 @@ retriever.index(pool)
 demos = retriever.retrieve(query, k=3)
 ```
 
+Any number of sub-retrievers (>= 2) can be fused — pass a longer list, e.g.
+`[TSRetriever(), VisionTSRetriever(), DelayDINORetriever()]` for a 3-way fusion.
+
 Internally, `retrieve(query, k)`:
-1. Calls `retriever_a.retrieve(query, n)` and `retriever_b.retrieve(query, n)`.
-2. Assigns RRF scores to every unique candidate across both lists.
+1. Calls `retriever.retrieve(query, n)` on every sub-retriever.
+2. Assigns RRF scores to every unique candidate across all lists.
 3. Sorts all candidates by RRF score descending.
 4. Applies the standard template-diversity and same-query exclusion rules
    (same as every other retriever: no same-`tid`, no same-`id` as the query).
@@ -98,3 +101,35 @@ Internally, `retrieve(query, k)`:
 The `n_candidates` parameter controls how many candidates each sub-retriever
 exposes to the fusion step. Using the full pool size is the most correct choice;
 lowering it trades recall for speed.
+
+---
+
+## Fusing the wrong signals hurts more than it helps
+
+The original `rrf` combo (`ts` + `text`) fuses TS-shape similarity with question-text
+similarity — two largely uncorrelated signals for a task that's fundamentally about
+time-series shape reasoning. Empirically it underperformed *both* of its inputs across
+every model (see `analysis/retriever_comparison.ipynb`): fusing a strong signal with a
+mismatched one dilutes rather than reinforces, since RRF assumes the lists being fused
+are all plausibly relevant to the same latent relevance signal.
+
+The three shape-based retrievers (`ts`, `vision_ts`, `delay_dino`) were consistently the
+top individual performers, meaning they already partially agree on good neighbors —
+exactly the precondition RRF needs to help (agreement compounds, disagreement doesn't
+hurt any single ranking).
+
+Fusion combos are selected from the CLI via `--retriever rrf-<a>-<b>[-<c>...]`
+(any 2+ distinct components from `{text, ts, vision_ts, delay_dino}`; parsed by
+`utils/retriever.py:build_retriever`). Bare `rrf` is a legacy alias for
+`rrf-ts-text`. The sweep in `scripts/submit_tse_rrf_combos.sh` covers all pairs
+plus the 3-way shape fusion:
+
+| Spec | Fuses | Rationale |
+|---|---|---|
+| `rrf` (= `rrf-ts-text`) | MOMENT + question text | Original combo — underperformed both inputs; kept for backward compatibility with existing results |
+| `rrf-ts-delay_dino` | MOMENT + delay-embedding DINO | Most representationally distinct pair among the strong performers (raw numeric embedding vs. delay-embedding image, different backbones) |
+| `rrf-ts-vision_ts` | MOMENT + line-plot DINO | Rendered line-plot embedding vs. raw numeric embedding — also good diversity |
+| `rrf-vision_ts-delay_dino` | line-plot + delay-embedding DINO | Both vision-backbone embeddings of a rendered series — most likely redundant, lowest expected lift |
+| `rrf-text-vision_ts` | question text + line-plot DINO | Does text pair better with a shape signal it disagrees with less? Control for the ts+text failure |
+| `rrf-text-delay_dino` | question text + delay-embedding DINO | Same control with the other image representation |
+| `rrf-ts-vision_ts-delay_dino` | all three shape signals | Tests whether more agreement compounds further |

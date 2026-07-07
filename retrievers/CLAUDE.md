@@ -24,6 +24,20 @@ Return up to `k` items from the indexed pool, ranked best-first. Must never retu
 the query item itself (match on `item["id"]` if available), and must never return
 items from the same question template (match on `item["tid"]` if available).
 
+**Leave-one-out lookup + encoder offload**  
+`run_exp.py` indexes the *full* dataset (leave-one-out), so every query's embedding
+already exists in the pool matrix. Encoder retrievers therefore:
+
+1. Build an `id → pool row` map at index time (`BaseRetriever._build_id_map`).
+2. In `retrieve()`, look up the query's precomputed embedding by `id`; only
+   queries absent from the pool are re-encoded (fallback path).
+3. Offload the encoder to CPU at the end of `index()`
+   (`BaseRetriever._offload_encoder`), freeing all encoder VRAM for the LLM.
+
+This makes `--retriever_device cuda` safe alongside the LLM: `run_exp.py` indexes
+the pool on the GPU *before* the LLM loads (critical for vLLM, which preallocates
+most of VRAM), and no encoder stays resident during evaluation.
+
 ---
 
 ## Batch-contract dict fields
@@ -88,13 +102,37 @@ original behaviour.
 | Class | File | Signal | Notes |
 |-------|------|--------|-------|
 | `RandomRetriever` | `random_retriever.py` | none | Random baseline |
-| `TextRetriever` | `text_retriever.py` | question text | SentenceTransformer cosine kNN |
+| `TextRetriever` | `text_retriever.py` | question text | SentenceTransformer cosine kNN; spec name `text_bge` = same class with `BAAI/bge-large-en-v1.5` |
 | `TSRetriever` | `ts_retriever.py` | time series shape | MOMENT embedding cosine kNN |
 | `VisionTSRetriever` | `vision_ts_retriever.py` | TS rendered as image | CLIP embedding cosine kNN |
-| `RRFRetriever` | `rrf_retriever.py` | TS + text (fused) | Reciprocal Rank Fusion of two sub-retrievers |
+| `DelayDINORetriever` | `delay_dino_retriever.py` | TS as delay-embedding image | DINO CLS embedding cosine kNN; pool-level min/max normalization, sliding-window delay embedding → 2D image |
+| `SpectralRetriever` | `spectral_retriever.py` | FFT magnitude spectrum | Pure numpy, no encoder. rFFT magnitudes (DC dropped) interpolated to a fixed 128-bin grid, top-32 components kept, power-normalized → cosine kNN. Captures global periodicity/rhythm |
+| `StatsRetriever` | `stats_retriever.py` | statistical features | Pure numpy/scipy, no encoder. 8 interpretable features (mean, std, trend slope, noise, seasonality strength, kurtosis, lag-1 autocorr, permutation entropy); pool-level z-score per dimension → L2 → cosine kNN |
+| `WaveletRetriever` | `wavelet_retriever.py` | TS as CWT scalogram image | Spec name `vision_wavelet`. Morlet CWT (pywt) → magnitude scalogram heatmap → same DINOv2 encoder as `vision_ts`, forming a clean ablation pair that isolates time-frequency localization. Multivariate: per-channel scalograms tiled vertically. Needs `PyWavelets` |
+| `RRFRetriever` | `rrf_retriever.py` | N fused sub-retrievers | Reciprocal Rank Fusion over an arbitrary list of sub-retrievers (`retrievers=[...]`, N >= 2). This is the MR-RRF fusion from `MRRF_METHOD.md` — no separate class needed |
+
+Fusion combos are selected from the CLI via a **composite spec**, parsed by
+`utils/retriever.py:build_retriever`:
+
+```
+--retriever rrf-<a>-<b>[-<c>...]
+```
+
+where each component is one of `text`, `text_bge`, `ts`, `vision_ts`,
+`delay_dino`, `spectral`, `stats`, `vision_wavelet` (any 2+, no duplicates).
+Component names never contain `-`, so the separator is unambiguous and the
+spec doubles as the run's filename/W&B tag. Examples: `rrf-ts-delay_dino`,
+`rrf-text-vision_ts`, and the full 6-way MR-RRF fusion
+`rrf-text-ts-vision_ts-spectral-stats-vision_wavelet` (see `MRRF_METHOD.md`
+and `scripts/submit_tse_mrrf_full.sh`).
+
+`--retriever rrf` (bare) is a **legacy alias for `rrf-ts-text`** — the combo the
+original `retriever_comparison_v1` runs were logged under. `random` cannot be
+fused (a random ranking adds nothing but noise to RRF).
 
 See [RRF.md](RRF.md) for a detailed explanation of RRF — what the formula means,
-why `k=60`, and how it compares to weighted cosine similarity.
+why `k=60`, how it compares to weighted cosine similarity, and why the `ts`+`text`
+combo underperforms while shape-only combos are expected to do better.
 
 ---
 
