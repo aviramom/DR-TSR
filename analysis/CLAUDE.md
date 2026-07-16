@@ -1,8 +1,13 @@
 # analysis/
 
 Local analysis notebooks and helpers for the DR-TSR retriever comparison experiment.
-All analysis reads directly from `results/` — no W&B API calls needed, since every
-completed job saves a per-sample JSON to that directory.
+The notebook (`retriever_comparison.ipynb`) reads directly from `results/` — no W&B
+API calls needed, since every completed job saves a per-sample JSON to that directory.
+`retriever_variants_summary.py` instead reads `wandb_runs.csv`, fetched via
+`scripts/fetch_wandb_results.py`: a run can be "finished" on W&B (accuracy logged)
+without its local per-sample JSON having made it to disk, so for the newer head-to-head
+sweeps the W&B summary is the more complete source of truth. Refresh the CSV before
+rerunning that script if new jobs have completed since the last fetch.
 
 ---
 
@@ -35,6 +40,7 @@ Filename convention: `{exp_id}__{method}__{task_id}__seed{seed}__{retriever}__{k
 | File | Purpose |
 |------|---------|
 | `retriever_comparison.ipynb` | Main analysis notebook — accuracy vs shots, retriever heatmaps, per-category/difficulty breakdowns, seed-averaged with error bars |
+| `retriever_variants_summary.py` | Per-model retriever × num_shots accuracy tables (+ per-retriever avg-across-shots column) for the four head-to-head sweeps (`ts_variants`/MOMENT, `dino3_variants`/vision, `text_variants`, `freqstat_variants`), plus the `none`/`random` baselines from `retriever_comparison_v1`; ends with one table aggregating across all models and shots. A second block reprints the tables with extra groups appended: the top-3 MR-RRF fusion (`top3_mrrf_k{10,60,100}_v1`), the DTW shape baseline (`dtw_v1`), the two coarse-to-fine two-stage retrievers (`twostage_v1`), and the two SigLIP2 fused image+text retrievers (`siglip_variants_v1`). Reads `wandb_runs.csv` (refresh first — see below), not local `results/*.json`: a run can be "finished" on W&B without its per-sample JSON having made it to disk, so the JSON directory undercounts. Run with `/home/aviramom/.conda/envs/multits/bin/python3 analysis/retriever_variants_summary.py` (needs pandas — not in the base `python3`) |
 
 ---
 

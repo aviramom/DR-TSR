@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """
-Pull all retriever_comparison_v1 runs from W&B and save a flat CSV summary.
+Pull runs from W&B and save a flat CSV summary.
 
-Each row is one completed run (method × retriever × num_shots × seed).
-Accuracy-by-group columns (category, subcategory, difficulty) are flattened
-into individual columns so the notebook can slice them directly.
+Each row is one run (method × retriever × num_shots × seed). Accuracy-by-group
+columns (category, subcategory, difficulty) are flattened into individual
+columns so the notebook / summary scripts can slice them directly.
+
+By default pulls every exp_id used by the retriever head-to-head sweeps (the
+original retriever_comparison_v1 plus the four variant scripts) in one call —
+this is more reliable than reading local results/*.json, since a run can be
+"finished" on W&B (accuracy logged) without its local per-sample JSON having
+made it to disk.
 
 Usage:
     python scripts/fetch_wandb_results.py
     python scripts/fetch_wandb_results.py --output analysis/wandb_runs.csv
-    python scripts/fetch_wandb_results.py --include_unfinished  # include crashed runs too
+    python scripts/fetch_wandb_results.py --exp_id retriever_comparison_v1  # single exp_id
+    python scripts/fetch_wandb_results.py --include_unfinished  # include running/crashed runs too
 
 Requires: pip install wandb pandas
 """
@@ -21,13 +28,25 @@ import pandas as pd
 
 ENTITY = "aviramom-"
 PROJECT = "DR-TSR"
-EXP_ID = "retriever_comparison_v1"
+EXP_IDS = [
+    "retriever_comparison_v1",
+    "ts_encoder_variants_v2",
+    "dino3_vision_variants_v1",
+    "text_encoder_variants_v1",
+    "freqstat_variants_v1",
+    "top3_mrrf_k10_v1",
+    "top3_mrrf_k60_v1",
+    "top3_mrrf_k100_v1",
+    "dtw_v1",
+    "twostage_v1",
+    "siglip_variants_v1",
+]
 
 # Config keys stored in W&B (live in run._attrs['config'], not run.config)
 CONFIG_KEYS = [
     "method", "task_id", "exp_id",
     "random_seed", "retriever",
-    "batch_size", "num_samples",
+    "batch_size", "num_samples", "rrf_k", "stage1_candidates",
 ]
 
 # Keys that the eval loop logs into summary (not config)
@@ -88,12 +107,13 @@ def main() -> None:
         help="Destination CSV path (default: analysis/wandb_runs.csv)",
     )
     parser.add_argument(
-        "--exp_id", default=EXP_ID,
-        help=f"W&B exp_id to filter on (default: {EXP_ID})",
+        "--exp_id", default=None,
+        help="W&B exp_id to filter on (comma-separated for multiple). "
+             f"Default: all of {EXP_IDS}",
     )
     parser.add_argument(
         "--include_unfinished", action="store_true",
-        help="Include runs that did not log summary.finished=True",
+        help="Include runs that did not log summary.finished=True (e.g. still running)",
     )
     args = parser.parse_args()
 
@@ -102,14 +122,17 @@ def main() -> None:
     except ImportError:
         raise SystemExit("wandb not installed — run: pip install wandb")
 
+    exp_ids = args.exp_id.split(",") if args.exp_id else EXP_IDS
+
     api = wandb.Api()
     path = f"{ENTITY}/{PROJECT}"
 
-    filters: dict = {"config.exp_id": args.exp_id}
+    exp_filter = exp_ids[0] if len(exp_ids) == 1 else {"$in": exp_ids}
+    filters: dict = {"config.exp_id": exp_filter}
     if not args.include_unfinished:
         filters["summary_metrics.finished"] = True
 
-    print(f"Querying {path}  exp_id={args.exp_id}  finished_only={not args.include_unfinished}")
+    print(f"Querying {path}  exp_id(s)={exp_ids}  finished_only={not args.include_unfinished}")
     # First pass: collect run IDs (api.runs returns lightweight objects without config)
     run_ids = [r.id for r in api.runs(path=path, filters=filters)]
     print(f"Found {len(run_ids)} runs — loading each one for full config...")

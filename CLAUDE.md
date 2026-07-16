@@ -33,6 +33,11 @@ Each subdirectory has its own `CLAUDE.md` with detailed documentation.
 
 ## Running an Experiment
 
+**Conda env**: activate `multits` first (`conda activate multits`, or
+`conda run -n multits python ...`). It has numpy/torch/transformers/tslearn/etc.
+The base interpreter has no ML deps. The `multits_large` env (newer transformers +
+vLLM) is used only by the vLLM runners. See `scripts/CLAUDE.md` for the full split.
+
 ```bash
 python run_exp.py \
     --method random_baseline \

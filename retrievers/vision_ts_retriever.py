@@ -35,16 +35,16 @@ def _render_ts(series_list: List[List[float]], image_size: int = 224) -> Image.I
 
 
 class VisionTSRetriever(BaseRetriever):
-    """Cosine kNN retriever over DINOv2 CLS embeddings of TS line plots.
+    """Cosine kNN retriever over DINOv3 CLS embeddings of TS line plots.
 
     Each item's time series are rendered as a z-score normalized line plot
-    (all series on one figure) and encoded with DINOv2. The CLS token
-    (768-dim for dinov2-base) is used as the image embedding.
+    (all series on one figure) and encoded with DINOv3. The CLS token
+    (768-dim for dinov3-vitb16) is used as the image embedding.
     """
 
     def __init__(
         self,
-        model_name: str = "facebook/dinov2-base",
+        model_name: str = "facebook/dinov3-vitb16-pretrain-lvd1689m",
         device: str = "cuda",
         image_size: int = 224,
     ) -> None:

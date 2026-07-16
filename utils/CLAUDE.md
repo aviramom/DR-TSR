@@ -22,7 +22,9 @@ args   = create_parser()       # parses sys.argv and post-processes defaults
 | `--method` | `random_baseline` | Key into `method_wrapper_dict` in `model.py` |
 | `--task_id` | `TimeSeriesExam` | Dataset to evaluate; data path resolved from `configs/data_paths.yaml` |
 | `--num_shots` | `1` | k-shot demonstrations (0 = zero-shot) |
-| `--retriever` | `none` | Demonstration retriever: plain name (`random`/`text`/`text_bge`/`ts`/`vision_ts`/`delay_dino`/`spectral`/`stats`/`vision_wavelet`) or fusion spec `rrf-<a>-<b>[-<c>...]` over any 2+ of them (e.g. `rrf-ts-delay_dino`, or the full MR-RRF `rrf-text-ts-vision_ts-spectral-stats-vision_wavelet`); bare `rrf` = legacy alias for `rrf-ts-text` |
+| `--retriever` | `none` | Demonstration retriever: plain name (`random`/`text`/`text_bge`/`ts`/`ts_compress`/`ts_multivec`/`ts_windowagg`/`vision_ts`/`delay_dino`/`spectral`/`stats`/`vision_wavelet`/`dtw`/`siglip_plot`/`siglip_delay`) or fusion spec `rrf-<a>-<b>[-<c>...]` over any 2+ of them (e.g. `rrf-ts-delay_dino`, or the full MR-RRF `rrf-text-ts-vision_ts-spectral-stats-vision_wavelet`); bare `rrf` = legacy alias for `rrf-ts-text`; two-stage spec `twostage-<a>-<b>` = coarse candidates by `<a>` re-ranked by `<b>` (e.g. `twostage-delay_dino-text`) |
+| `--rrf_k` | `60` | RRF smoothing constant (`score = sum 1/(k + rank)`); only used when `--retriever` is an `rrf-...` spec. Part of `--keys_to_match`, so sweeping it under one retriever spec needs a distinct `--exp_id` per value (see `scripts/submit_tse_top3_mrrf_variants.sh`) |
+| `--stage1_candidates` | `50` | Coarse candidate-set size pulled by the stage-1 retriever; only used when `--retriever` is a `twostage-...` spec. Part of `--keys_to_match` (same dedup caveat as `--rrf_k`) |
 | `--batch_size` | `1` | Samples per `model.generate()` call |
 | `--num_samples` | `None` | Cap on dataset size for smoke tests |
 | `--display_samples` | `3` | Debug samples printed at end of run |
@@ -31,7 +33,7 @@ args   = create_parser()       # parses sys.argv and post-processes defaults
 | `--use_wandb` | `0` | Enable W&B logging |
 | `--override_run` | `1` | Re-run even if a matching finished W&B run exists |
 | `--device` | `cuda` | PyTorch device for the LLM |
-| `--retriever_device` | `cpu` | Device for retriever encoder models (MOMENT, DINOv2). `cuda` is safe alongside the LLM: `run_exp.py` indexes the pool before the LLM loads and encoders offload to CPU afterwards. Default stays `cpu` for CPU-only nodes. |
+| `--retriever_device` | `cpu` | Device for retriever encoder models (MOMENT, DINOv3). `cuda` is safe alongside the LLM: `run_exp.py` indexes the pool before the LLM loads and encoders offload to CPU afterwards. Default stays `cpu` for CPU-only nodes. |
 | `--quantization` | `none` | `4bit` / `8bit` / `none` |
 | `--cache_dir` | `""` → `None` | HuggingFace model cache directory |
 

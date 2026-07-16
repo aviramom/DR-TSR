@@ -36,7 +36,7 @@ def _scalogram(series: List[float], num_scales: int) -> np.ndarray:
 
 
 class WaveletRetriever(BaseRetriever):
-    """Cosine kNN retriever over DINOv2 CLS embeddings of CWT scalograms.
+    """Cosine kNN retriever over DINOv3 CLS embeddings of CWT scalograms.
 
     Same frozen vision encoder as VisionTSRetriever, different input: the
     time series is transformed into a Morlet-wavelet scalogram (scales ×
@@ -52,7 +52,7 @@ class WaveletRetriever(BaseRetriever):
 
     def __init__(
         self,
-        model_name: str = "facebook/dinov2-base",
+        model_name: str = "facebook/dinov3-vitb16-pretrain-lvd1689m",
         device: str = "cuda",
         image_size: int = 224,
         num_scales: int = 64,

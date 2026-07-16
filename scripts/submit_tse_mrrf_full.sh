@@ -7,10 +7,10 @@
 # representation signals:
 #   text            question sentence embedding (MiniLM)
 #   ts              MOMENT embedding of the raw sequence
-#   vision_ts       DINOv2 embedding of the rendered line plot
+#   vision_ts       DINOv3 embedding of the rendered line plot
 #   spectral        FFT magnitude spectrum (pure numpy)
 #   stats           interpretable statistical feature vector (numpy/scipy)
-#   vision_wavelet  DINOv2 embedding of the Morlet CWT scalogram (needs pywt)
+#   vision_wavelet  DINOv3 embedding of the Morlet CWT scalogram (needs pywt)
 #
 # Run this BEFORE the full ablation sweep (singletons / pairs / triples) to check that
 # the 6-way fusion is worth the ablation grid. Same 3 models, shots, seeds and exp_id

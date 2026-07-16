@@ -72,6 +72,44 @@ class BaseRetriever(ABC):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    def pool_similarity(
+        self,
+        query: Dict[str, Any],
+        items: List[Dict[str, Any]],
+    ) -> np.ndarray:
+        """Cosine similarity of each item in `items` to `query`.
+
+        Read straight from the retriever's indexed, L2-normalized pool vectors
+        (`self._pool_vecs` / `self._id_to_row`) — no re-encoding. Used by
+        TwoStageRetriever to re-rank a coarse candidate set with a second signal.
+
+        Relies on the repo's leave-one-out indexing, so the query and every
+        candidate already have a row in the pool matrix. Items absent from the
+        pool (and the whole array, if the query itself is absent) score -inf, so
+        the caller can detect that case and fall back to the stage-1 order.
+
+        Only defined for cosine-family retrievers (text, ts*, vision_ts,
+        delay_dino, vision_wavelet, spectral, stats) that expose those two
+        attributes; other retrievers raise TypeError.
+        """
+        pool_vecs = getattr(self, "_pool_vecs", None)
+        id_to_row = getattr(self, "_id_to_row", None)
+        if pool_vecs is None or id_to_row is None:
+            raise TypeError(
+                f"{type(self).__name__} cannot rank a candidate subset "
+                "(it exposes no indexed pool vectors)."
+            )
+        out = np.full(len(items), -np.inf, dtype=np.float32)
+        q_row = id_to_row.get(query.get("id"))
+        if q_row is None:
+            return out
+        q_vec = pool_vecs[q_row]
+        for i, item in enumerate(items):
+            r = id_to_row.get(item.get("id"))
+            if r is not None:
+                out[i] = float(pool_vecs[r] @ q_vec)
+        return out
+
     @staticmethod
     def _cosine_top_k(
         query_vec: np.ndarray,
@@ -101,6 +139,26 @@ class BaseRetriever(ABC):
             most one item per tid.
         """
         scores = pool_vecs @ query_vec  # (N,) cosine similarity
+        return BaseRetriever._top_k_from_scores(
+            scores, pool_items, k, exclude_id, exclude_tid
+        )
+
+    @staticmethod
+    def _top_k_from_scores(
+        scores: np.ndarray,
+        pool_items: List[Dict[str, Any]],
+        k: int,
+        exclude_id: Optional[int] = None,
+        exclude_tid: Optional[Any] = None,
+    ) -> List[Dict[str, Any]]:
+        """Select top-k items from a precomputed per-item score array.
+
+        Shared selection logic behind _cosine_top_k, exposed separately for
+        retrievers whose score is not a single dot product per item (e.g.
+        multi-vector MaxSim). Applies the same exclusion and greedy
+        template-diversity rules. `scores` is mutated (masked entries are
+        set to -inf).
+        """
         for i, item in enumerate(pool_items):
             if exclude_id is not None and item.get("id") == exclude_id:
                 scores[i] = -np.inf

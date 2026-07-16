@@ -101,6 +101,8 @@ def _save_results(args, artifacts: Dict[str, Any]) -> None:
         "seed":       args.random_seed,
         "retriever":  retriever_tag,
         "num_shots":  args.num_shots,
+        "rrf_k":      args.rrf_k,
+        "stage1_candidates": args.stage1_candidates,
     }
 
     rows = [
@@ -198,8 +200,13 @@ def main():
     if args.retriever == "none" or args.num_shots == 0:
         retriever = None
     else:
-        print(f"[run_exp] retriever={args.retriever}  indexing {len(dataset)} items...")
-        retriever = build_retriever(args.retriever, device=args.retriever_device)
+        print(f"[run_exp] retriever={args.retriever}  rrf_k={args.rrf_k}  indexing {len(dataset)} items...")
+        retriever = build_retriever(
+            args.retriever,
+            device=args.retriever_device,
+            rrf_k=args.rrf_k,
+            stage1_candidates=args.stage1_candidates,
+        )
         retriever.index(list(dataset))
 
     # 7. Model

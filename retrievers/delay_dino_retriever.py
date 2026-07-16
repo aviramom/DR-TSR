@@ -58,15 +58,15 @@ class DelayDINORetriever(BaseRetriever):
     CLS token is the image embedding. Multi-series items use the mean of
     the individual series embeddings.
 
-    Defaults to DINOv2 (ungated). To use DINOv3 instead, pass e.g.
-    model_name="facebook/dinov3-vitb16-pretrain-lvd1689m" — these checkpoints
-    are gated on Hugging Face and require requesting access on the model
-    page first (approval is per-account, not automatic).
+    Defaults to DINOv3. These checkpoints are gated on Hugging Face — access
+    must be requested and approved (per-account) on the model page before
+    `from_pretrained` will succeed. To fall back to the ungated DINOv2, pass
+    model_name="facebook/dinov2-base".
     """
 
     def __init__(
         self,
-        model_name: str = "facebook/dinov2-base",
+        model_name: str = "facebook/dinov3-vitb16-pretrain-lvd1689m",
         device: str = "cuda",
         base_height: int = 256,
         base_width: int = 256,

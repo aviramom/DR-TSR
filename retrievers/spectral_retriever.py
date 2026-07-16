@@ -39,7 +39,7 @@ class SpectralRetriever(BaseRetriever):
     """Cosine kNN retriever over FFT magnitude spectra.
 
     Captures periodicity, dominant frequencies, and rhythmic structure —
-    global frequency content that neither DINOv2 (visual appearance) nor
+    global frequency content that neither DINOv3 (visual appearance) nor
     MOMENT (learned shape features) reliably encodes. Pure numpy: no
     pretrained encoder, no GPU.
 

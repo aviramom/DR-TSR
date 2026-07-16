@@ -14,7 +14,7 @@ For each item in the pool (a time series + question + correct answer), compute a
 
 ### 1. Visual TS embedding (`vision_ts`)
 - Render the time series as a plot image (same rendering pipeline already in use)
-- Embed with a frozen vision encoder (DINOv2 or similar)
+- Embed with a frozen vision encoder (DINOv3 or similar)
 - Similarity: cosine
 
 ### 2. Numeric TS embedding (`ts`)
@@ -27,7 +27,7 @@ For each item in the pool (a time series + question + correct answer), compute a
 - Optionally: keep only the top-K frequency components (e.g. top 32) to reduce dimensionality and noise
 - Normalize by total power so scale differences don't dominate
 - Similarity: cosine in the magnitude spectrum space
-- **Why**: captures periodicity, dominant frequencies, and rhythmic structure — things neither DINOv2 nor MOMENT reliably encode
+- **Why**: captures periodicity, dominant frequencies, and rhythmic structure — things neither DINOv3 nor MOMENT reliably encode
 - **No model needed**: pure numpy, no pretrained encoder required
 
 ### 4. Statistical feature embedding (`stats`)
@@ -56,9 +56,9 @@ For each item in the pool (a time series + question + correct answer), compute a
 - Take the magnitude of the complex CWT coefficients to produce a 2D scalogram (scales × time)
 - Normalize the scalogram to [0, 1] for consistent rendering
 - Render as a heatmap image (same dimensions as the plot images used for `vision_ts`)
-- Embed with the same frozen vision encoder as `vision_ts` (DINOv2 or similar)
+- Embed with the same frozen vision encoder as `vision_ts` (DINOv3 or similar)
 - Similarity: cosine
-- **Why**: FFT gives global frequency content but loses temporal localization — it cannot distinguish "periodicity throughout" from "periodicity only in the first half." The wavelet scalogram captures *when* each frequency is present, making it sensitive to localized anomalies, regime changes, and burst patterns that FFT is blind to. Using DINOv2 on the scalogram image reuses the existing vision pipeline with no new encoder downloads.
+- **Why**: FFT gives global frequency content but loses temporal localization — it cannot distinguish "periodicity throughout" from "periodicity only in the first half." The wavelet scalogram captures *when* each frequency is present, making it sensitive to localized anomalies, regime changes, and burst patterns that FFT is blind to. Using DINOv3 on the scalogram image reuses the existing vision pipeline with no new encoder downloads.
 - **Implementation note**: for multivariate series, either (a) compute the scalogram of the mean series, (b) compute per-channel scalograms and tile them into a single image, or (c) use the channel with highest variance. Option (b) is most informative but produces a wider image — ensure the vision encoder's patch size handles it gracefully.
 - **Relationship to `vision_ts`**: same encoder, different input. This creates a clean ablation pair — any difference in retrieval quality between `vision_ts` and `vision_wavelet` isolates what time-frequency localization adds over raw visual appearance.
 - **Dependencies**: `pywt` (PyWavelets) — lightweight, no GPU required
